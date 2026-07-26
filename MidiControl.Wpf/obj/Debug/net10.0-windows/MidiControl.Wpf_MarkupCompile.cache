@@ -1,5 +1,5 @@
 ﻿MidiControl.Wpf
-1.0.0.0
+
 
 winexe
 C#
@@ -12,9 +12,9 @@ TRACE;DEBUG;NET;NET10_0;NETCOREAPP;WINDOWS;WINDOWS7_0;NET5_0_OR_GREATER;NET6_0_O
 D:\Projects\GuitarProMidiControl\MidiControl.Wpf\App.xaml
 11407045341
 
-6-1772419160
-207-1259472364
+41367404974
+2082133634897
 MainWindow.xaml;
 
-True
+False
 

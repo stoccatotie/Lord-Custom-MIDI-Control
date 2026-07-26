@@ -17,6 +17,19 @@
         "build": {
           "build/Melanchall.DryWetMidi.targets": {}
         }
+      },
+      "MidiControl.Core/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v10.0",
+        "dependencies": {
+          "Melanchall.DryWetMidi": "8.0.3"
+        },
+        "compile": {
+          "bin/placeholder/MidiControl.Core.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/MidiControl.Core.dll": {}
+        }
       }
     }
   },
@@ -41,11 +54,17 @@
         "melanchall.drywetmidi.8.0.3.nupkg.sha512",
         "melanchall.drywetmidi.nuspec"
       ]
+    },
+    "MidiControl.Core/1.0.0": {
+      "type": "project",
+      "path": "../MidiControl.Core/MidiControl.Core.csproj",
+      "msbuildProject": "../MidiControl.Core/MidiControl.Core.csproj"
     }
   },
   "projectFileDependencyGroups": {
     "net10.0-windows": [
-      "Melanchall.DryWetMidi >= 8.0.3"
+      "Melanchall.DryWetMidi >= 8.0.3",
+      "MidiControl.Core >= 1.0.0"
     ]
   },
   "packageFolders": {
@@ -73,7 +92,11 @@
         "net10.0-windows": {
           "framework": "net10.0-windows7.0",
           "targetAlias": "net10.0-windows",
-          "projectReferences": {}
+          "projectReferences": {
+            "D:\\Projects\\GuitarProMidiControl\\MidiControl.Core\\MidiControl.Core.csproj": {
+              "projectPath": "D:\\Projects\\GuitarProMidiControl\\MidiControl.Core\\MidiControl.Core.csproj"
+            }
+          }
         }
       },
       "warningProperties": {

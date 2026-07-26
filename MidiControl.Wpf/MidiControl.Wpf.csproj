@@ -12,4 +12,8 @@
     <PackageReference Include="Melanchall.DryWetMidi" Version="8.0.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\MidiControl.Core\MidiControl.Core.csproj" />
+  </ItemGroup>
+
 </Project>

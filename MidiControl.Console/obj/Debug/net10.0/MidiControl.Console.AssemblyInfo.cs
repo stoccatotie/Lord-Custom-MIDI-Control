@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MidiControl.Console")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a81fd948edcc211f9f2409f6e965c2d83601bddb")]
 [assembly: System.Reflection.AssemblyProductAttribute("MidiControl.Console")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MidiControl.Console")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
