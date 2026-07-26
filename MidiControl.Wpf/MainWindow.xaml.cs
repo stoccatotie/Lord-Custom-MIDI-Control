@@ -1,10 +1,12 @@
 using MidiControl.Core.Models;
 using MidiControl.Core.Services;
+using MidiControl.Wpf.Models;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace MidiControl.Wpf;
 
@@ -18,6 +20,7 @@ public partial class MainWindow : Window
     private readonly MidiConnectionService _midiConnectionService;
     private readonly SettingsService _settingsService;
     private readonly AppSettings _loadedSettings;
+    private readonly DispatcherTimer _midiDeviceCheckTimer;
     private readonly ObservableCollection<MidiMapping> _mappings = new();
     private readonly ObservableCollection<MidiLogEntry> _midiLogEntries = new();
     private List<MidiMapping> _lastAppliedMappings = new();
@@ -25,6 +28,16 @@ public partial class MainWindow : Window
     private bool _isMidiLearnActive;
     private bool _isClosing;
     private bool _autoConnectAttempted;
+    private bool _isCheckingMidiDevices;
+    private bool _isRefreshingMidiDevices;
+    private bool _midiAvailabilityCheckErrorReported;
+    private string? _unavailableSavedInputDeviceName;
+    private string? _unavailableSavedOutputDeviceName;
+    private bool _unavailableInputWasSaved;
+    private bool _unavailableOutputWasSaved;
+
+    public IReadOnlyList<MidiControlChangeOption> MidiControlChangeOptions =>
+        MidiControlChangeCatalog.Options;
 
     public MainWindow()
     {
@@ -36,6 +49,11 @@ public partial class MainWindow : Window
         _midiConnectionService.MessageReceived += MidiConnectionService_MessageReceived;
         _midiConnectionService.MidiLearnCaptured += MidiConnectionService_MidiLearnCaptured;
         _midiConnectionService.ConnectionError += MidiConnectionService_ConnectionError;
+        _midiDeviceCheckTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(2)
+        };
+        _midiDeviceCheckTimer.Tick += MidiDeviceCheckTimer_Tick;
 
         _loadedSettings = _settingsService.Load();
 
@@ -52,7 +70,7 @@ public partial class MainWindow : Window
         RefreshMidiDevices(
             _loadedSettings.InputDeviceName,
             _loadedSettings.OutputDeviceName,
-            usePreferredSelections: true);
+            restoreSavedSelections: true);
         UpdateConnectionUi(isRunning: false);
     }
 
@@ -90,6 +108,8 @@ public partial class MainWindow : Window
         }
         finally
         {
+            _midiDeviceCheckTimer.Stop();
+            _midiDeviceCheckTimer.Tick -= MidiDeviceCheckTimer_Tick;
             _midiConnectionService.CancelMidiLearn();
             _midiConnectionService.Stop();
             _midiConnectionService.MessageReceived -= MidiConnectionService_MessageReceived;
@@ -120,7 +140,18 @@ public partial class MainWindow : Window
 
         if (!_loadedSettings.AutoConnect)
         {
-            SetConnectionStatus(isRunning: false);
+            if (!TrySetUnavailableDeviceStatus())
+            {
+                SetConnectionStatus(isRunning: false);
+            }
+            return;
+        }
+
+        if (_unavailableSavedInputDeviceName is not null ||
+            _unavailableSavedOutputDeviceName is not null)
+        {
+            UpdateConnectionUi(isRunning: false);
+            TrySetUnavailableDeviceStatus();
             return;
         }
 
@@ -139,7 +170,7 @@ public partial class MainWindow : Window
         if (!savedDevicesAreAvailable)
         {
             UpdateConnectionUi(isRunning: false);
-            SetStatus("Auto-connect failed: saved MIDI device is unavailable");
+            SetStatus("Auto-connect requires available saved MIDI input and output devices");
             return;
         }
 
@@ -167,20 +198,27 @@ public partial class MainWindow : Window
         if (InputDeviceComboBox.SelectedItem is not string inputDeviceName)
         {
             UpdateConnectionUi(isRunning: false);
-            SetStatus("Select MIDI input device");
+            SetStatus(_unavailableSavedInputDeviceName is null
+                ? "Select MIDI input device"
+                : $"Select a replacement for unavailable MIDI input: {_unavailableSavedInputDeviceName}");
             return false;
         }
 
         if (OutputDeviceComboBox.SelectedItem is not string outputDeviceName)
         {
             UpdateConnectionUi(isRunning: false);
-            SetStatus("Select MIDI output device");
+            SetStatus(_unavailableSavedOutputDeviceName is null
+                ? "Select MIDI output device"
+                : $"Select a replacement for unavailable MIDI output: {_unavailableSavedOutputDeviceName}");
             return false;
         }
 
         try
         {
             _midiConnectionService.Start(inputDeviceName, outputDeviceName);
+            ClearUnavailableInputDevice();
+            ClearUnavailableOutputDevice();
+            _midiDeviceCheckTimer.Start();
             UpdateConnectionUi(isRunning: true);
             SetConnectionStatus(isRunning: true);
             return true;
@@ -197,10 +235,37 @@ public partial class MainWindow : Window
 
     private void StopButton_Click(object sender, RoutedEventArgs e)
     {
-        _midiConnectionService.Stop();
-        ResetMidiLearnUi();
-        UpdateConnectionUi(isRunning: false);
-        SetConnectionStatus(isRunning: false);
+        StopMidiConnection(GetConnectionStatus(isRunning: false), refreshDevices: false);
+    }
+
+    private void InputDeviceComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isRefreshingMidiDevices)
+        {
+            return;
+        }
+
+        if (InputDeviceComboBox.SelectedItem is string)
+        {
+            ClearUnavailableInputDevice();
+        }
+
+        UpdateStatusAfterManualSelection();
+    }
+
+    private void OutputDeviceComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isRefreshingMidiDevices)
+        {
+            return;
+        }
+
+        if (OutputDeviceComboBox.SelectedItem is string)
+        {
+            ClearUnavailableOutputDevice();
+        }
+
+        UpdateStatusAfterManualSelection();
     }
 
     private void ClearLogButton_Click(object sender, RoutedEventArgs e)
@@ -401,6 +466,78 @@ public partial class MainWindow : Window
         });
     }
 
+    private void MidiDeviceCheckTimer_Tick(object? sender, EventArgs e)
+    {
+        if (_isCheckingMidiDevices || !_midiConnectionService.IsRunning)
+        {
+            return;
+        }
+
+        _isCheckingMidiDevices = true;
+
+        try
+        {
+            var activeInputName = _midiConnectionService.InputDeviceName;
+            var activeOutputName = _midiConnectionService.OutputDeviceName;
+
+            if (!_midiDeviceService.TryGetInputDeviceNames(out var inputDeviceNames) ||
+                !_midiDeviceService.TryGetOutputDeviceNames(out var outputDeviceNames))
+            {
+                ReportMidiAvailabilityCheckError(
+                    "MIDI device availability could not be checked.");
+                return;
+            }
+
+            _midiAvailabilityCheckErrorReported = false;
+
+            var inputDisconnected =
+                activeInputName is not null &&
+                !inputDeviceNames.Any(name =>
+                    string.Equals(name, activeInputName, StringComparison.Ordinal));
+            var outputDisconnected =
+                activeOutputName is not null &&
+                !outputDeviceNames.Any(name =>
+                    string.Equals(name, activeOutputName, StringComparison.Ordinal));
+
+            if (!inputDisconnected && !outputDisconnected)
+            {
+                return;
+            }
+
+            if (inputDisconnected)
+            {
+                _unavailableSavedInputDeviceName = activeInputName;
+                _unavailableInputWasSaved = false;
+            }
+
+            if (outputDisconnected)
+            {
+                _unavailableSavedOutputDeviceName = activeOutputName;
+                _unavailableOutputWasSaved = false;
+            }
+
+            var statusMessage = inputDisconnected && outputDisconnected
+                ? $"MIDI devices disconnected: input \"{activeInputName}\", output \"{activeOutputName}\""
+                : inputDisconnected
+                    ? $"MIDI input device disconnected: {activeInputName}"
+                    : $"MIDI output device disconnected: {activeOutputName}";
+
+            StopMidiConnection(statusMessage, refreshDevices: true);
+        }
+        catch (Exception exception)
+        {
+            var message = string.IsNullOrWhiteSpace(exception.Message)
+                ? "MIDI device availability could not be checked."
+                : $"MIDI device availability check failed: {exception.Message}";
+
+            ReportMidiAvailabilityCheckError(message);
+        }
+        finally
+        {
+            _isCheckingMidiDevices = false;
+        }
+    }
+
     private void MidiConnectionService_MidiLearnCaptured(object? sender, MidiLearnCapturedEventArgs e)
     {
         if (Dispatcher.HasShutdownStarted)
@@ -429,38 +566,68 @@ public partial class MainWindow : Window
     }
 
     private void RefreshMidiDevices(
-        string? preferredInput = null,
-        string? preferredOutput = null,
-        bool usePreferredSelections = false)
+        string? preferredInputName = null,
+        string? preferredOutputName = null,
+        bool restoreSavedSelections = false,
+        bool updateStatus = true)
     {
-        var selectedInput = usePreferredSelections
-            ? preferredInput
+        if (_midiConnectionService.IsRunning)
+        {
+            return;
+        }
+
+        var selectedInput = restoreSavedSelections
+            ? preferredInputName
             : InputDeviceComboBox.SelectedItem as string;
-        var selectedOutput = usePreferredSelections
-            ? preferredOutput
+        var selectedOutput = restoreSavedSelections
+            ? preferredOutputName
             : OutputDeviceComboBox.SelectedItem as string;
 
-        InputDeviceComboBox.Items.Clear();
-        OutputDeviceComboBox.Items.Clear();
+        if (!restoreSavedSelections)
+        {
+            selectedInput ??= _unavailableSavedInputDeviceName;
+            selectedOutput ??= _unavailableSavedOutputDeviceName;
+        }
 
         var inputDeviceNames = _midiDeviceService.GetInputDeviceNames();
         var outputDeviceNames = _midiDeviceService.GetOutputDeviceNames();
-        var selectedDeviceDisappeared =
-            (selectedInput is not null && !inputDeviceNames.Contains(selectedInput)) ||
-            (selectedOutput is not null && !outputDeviceNames.Contains(selectedOutput));
 
-        foreach (var deviceName in inputDeviceNames)
+        _isRefreshingMidiDevices = true;
+
+        try
         {
-            InputDeviceComboBox.Items.Add(deviceName);
+            ReplaceComboBoxItems(InputDeviceComboBox, inputDeviceNames);
+            ReplaceComboBoxItems(OutputDeviceComboBox, outputDeviceNames);
+
+            RestoreDeviceSelection(
+                InputDeviceComboBox,
+                inputDeviceNames,
+                selectedInput,
+                restoreSavedSelections,
+                isInput: true);
+            RestoreDeviceSelection(
+                OutputDeviceComboBox,
+                outputDeviceNames,
+                selectedOutput,
+                restoreSavedSelections,
+                isInput: false);
+        }
+        finally
+        {
+            _isRefreshingMidiDevices = false;
         }
 
-        foreach (var deviceName in outputDeviceNames)
+        UpdateConnectionUi(isRunning: false);
+
+        if (!updateStatus)
         {
-            OutputDeviceComboBox.Items.Add(deviceName);
+            return;
         }
 
-        RestoreSelection(InputDeviceComboBox, selectedInput);
-        RestoreSelection(OutputDeviceComboBox, selectedOutput);
+        if (TrySetUnavailableDeviceStatus())
+        {
+            return;
+        }
 
         if (inputDeviceNames.Count == 0)
         {
@@ -470,26 +637,180 @@ public partial class MainWindow : Window
         {
             SetStatus("No MIDI output devices");
         }
-        else if (selectedDeviceDisappeared)
-        {
-            SetStatus("Selected MIDI device is no longer available");
-        }
         else
         {
             SetConnectionStatus(isRunning: false);
         }
     }
 
-    private static void RestoreSelection(ComboBox comboBox, string? previousSelection)
+    private void RestoreDeviceSelection(
+        ComboBox comboBox,
+        IReadOnlyList<string> availableNames,
+        string? preferredName,
+        bool restoringSavedSelection,
+        bool isInput)
     {
-        if (previousSelection is not null && comboBox.Items.Contains(previousSelection))
+        if (preferredName is not null)
         {
-            comboBox.SelectedItem = previousSelection;
+            var availableName = availableNames.FirstOrDefault(name =>
+                string.Equals(name, preferredName, StringComparison.Ordinal));
+
+            if (availableName is not null)
+            {
+                comboBox.SelectedItem = availableName;
+
+                if (isInput)
+                {
+                    ClearUnavailableInputDevice();
+                }
+                else
+                {
+                    ClearUnavailableOutputDevice();
+                }
+
+                return;
+            }
+
+            comboBox.SelectedIndex = -1;
+
+            if (isInput)
+            {
+                var wasSaved =
+                    _unavailableInputWasSaved &&
+                    string.Equals(
+                        _unavailableSavedInputDeviceName,
+                        preferredName,
+                        StringComparison.Ordinal);
+                _unavailableSavedInputDeviceName = preferredName;
+                _unavailableInputWasSaved = restoringSavedSelection || wasSaved;
+            }
+            else
+            {
+                var wasSaved =
+                    _unavailableOutputWasSaved &&
+                    string.Equals(
+                        _unavailableSavedOutputDeviceName,
+                        preferredName,
+                        StringComparison.Ordinal);
+                _unavailableSavedOutputDeviceName = preferredName;
+                _unavailableOutputWasSaved = restoringSavedSelection || wasSaved;
+            }
+
+            return;
         }
-        else if (comboBox.Items.Count > 0)
+
+        comboBox.SelectedIndex = availableNames.Count > 0 ? 0 : -1;
+    }
+
+    private static void ReplaceComboBoxItems(
+        ComboBox comboBox,
+        IReadOnlyList<string> deviceNames)
+    {
+        comboBox.Items.Clear();
+
+        foreach (var deviceName in deviceNames)
         {
-            comboBox.SelectedIndex = 0;
+            comboBox.Items.Add(deviceName);
         }
+    }
+
+    private void StopMidiConnection(string statusMessage, bool refreshDevices)
+    {
+        _midiConnectionService.CancelMidiLearn();
+        _midiDeviceCheckTimer.Stop();
+        _midiConnectionService.Stop();
+        ResetMidiLearnUi();
+        UpdateConnectionUi(isRunning: false);
+
+        if (refreshDevices)
+        {
+            RefreshMidiDevices(updateStatus: false);
+        }
+
+        SetStatus(statusMessage);
+    }
+
+    private void ReportMidiAvailabilityCheckError(string message)
+    {
+        if (_midiAvailabilityCheckErrorReported)
+        {
+            return;
+        }
+
+        _midiAvailabilityCheckErrorReported = true;
+        MidiConnectionService_ConnectionError(
+            this,
+            new MidiConnectionErrorEventArgs(DateTime.Now, message));
+    }
+
+    private void UpdateStatusAfterManualSelection()
+    {
+        if (_midiConnectionService.IsRunning)
+        {
+            return;
+        }
+
+        UpdateConnectionUi(isRunning: false);
+
+        if (!TrySetUnavailableDeviceStatus())
+        {
+            SetConnectionStatus(isRunning: false);
+        }
+    }
+
+    private bool TrySetUnavailableDeviceStatus()
+    {
+        var inputName = _unavailableSavedInputDeviceName;
+        var outputName = _unavailableSavedOutputDeviceName;
+
+        if (inputName is null && outputName is null)
+        {
+            return false;
+        }
+
+        if (inputName is not null && outputName is not null)
+        {
+            if (_unavailableInputWasSaved && _unavailableOutputWasSaved)
+            {
+                SetStatus(
+                    $"Saved MIDI devices are unavailable: input \"{inputName}\", output \"{outputName}\"");
+            }
+            else
+            {
+                var inputPrefix = _unavailableInputWasSaved ? "Saved" : "Selected";
+                var outputPrefix = _unavailableOutputWasSaved ? "saved" : "selected";
+                SetStatus(
+                    $"{inputPrefix} MIDI input device is unavailable: {inputName}; " +
+                    $"{outputPrefix} MIDI output device is unavailable: {outputName}");
+            }
+
+            return true;
+        }
+
+        if (inputName is not null)
+        {
+            SetStatus(_unavailableInputWasSaved
+                ? $"Saved MIDI input device is unavailable: {inputName}"
+                : $"Selected MIDI input device is unavailable: {inputName}");
+            return true;
+        }
+
+        SetStatus(_unavailableOutputWasSaved
+            ? $"Saved MIDI output device is unavailable: {outputName}"
+            : $"Selected MIDI output device is unavailable: {outputName}");
+        return true;
+    }
+
+    private void ClearUnavailableInputDevice()
+    {
+        _unavailableSavedInputDeviceName = null;
+        _unavailableInputWasSaved = false;
+    }
+
+    private void ClearUnavailableOutputDevice()
+    {
+        _unavailableSavedOutputDeviceName = null;
+        _unavailableOutputWasSaved = false;
     }
 
     private bool TryApplyMappings()
@@ -633,7 +954,10 @@ public partial class MainWindow : Window
 
     private void UpdateConnectionUi(bool isRunning)
     {
-        StartButton.IsEnabled = !isRunning;
+        StartButton.IsEnabled =
+            !isRunning &&
+            InputDeviceComboBox.SelectedItem is string &&
+            OutputDeviceComboBox.SelectedItem is string;
         StopButton.IsEnabled = isRunning;
         RefreshButton.IsEnabled = !isRunning;
         InputDeviceComboBox.IsEnabled = !isRunning;

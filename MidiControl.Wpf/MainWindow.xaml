@@ -1,7 +1,7 @@
 <Window x:Class="MidiControl.Wpf.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Guitar Pro MIDI Control"
+        Title="Lord Custom MIDI Control"
         Width="1200"
         Height="800"
         MinWidth="1000"
@@ -79,6 +79,44 @@
             <Setter Property="Foreground" Value="#EEF2F7" />
             <Setter Property="Background" Value="{StaticResource ControlBrush}" />
             <Setter Property="Padding" Value="10,7" />
+        </Style>
+
+        <Style x:Key="MidiDeviceComboBoxItemStyle" TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="#111827" />
+            <Setter Property="Background" Value="#F8FAFC" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="Opacity" Value="1" />
+            <Style.Triggers>
+                <Trigger Property="IsHighlighted" Value="True">
+                    <Setter Property="Background" Value="#DBEAFE" />
+                    <Setter Property="Foreground" Value="#111827" />
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#BFDBFE" />
+                    <Setter Property="Foreground" Value="#0F172A" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="#E2E8F0" />
+                    <Setter Property="Foreground" Value="#334155" />
+                    <Setter Property="Opacity" Value="1" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="MidiDeviceComboBoxStyle"
+               TargetType="ComboBox"
+               BasedOn="{StaticResource {x:Type ComboBox}}">
+            <Setter Property="Background" Value="#F1F5F9" />
+            <Setter Property="Foreground" Value="#111827" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource MidiDeviceComboBoxItemStyle}" />
+            <Setter Property="Opacity" Value="1" />
+            <Style.Triggers>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="#E2E8F0" />
+                    <Setter Property="Foreground" Value="#334155" />
+                    <Setter Property="Opacity" Value="1" />
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <Style TargetType="ListView">
@@ -160,11 +198,19 @@
     <Grid Margin="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0"
+        <TextBlock Grid.Row="0"
+                   Margin="2,0,0,12"
+                   FontSize="21"
+                   FontWeight="SemiBold"
+                   Foreground="#F8FAFC"
+                   Text="Lord Custom MIDI Control" />
+
+        <Border Grid.Row="1"
                 Background="{StaticResource PanelBrush}"
                 BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="1"
@@ -190,10 +236,16 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Column="0" Margin="0,0,10,0" Text="Input Device:" />
-                <ComboBox x:Name="InputDeviceComboBox" Grid.Column="1" />
+                <ComboBox x:Name="InputDeviceComboBox"
+                          Grid.Column="1"
+                          SelectionChanged="InputDeviceComboBox_SelectionChanged"
+                          Style="{StaticResource MidiDeviceComboBoxStyle}" />
 
                 <TextBlock Grid.Column="3" Margin="0,0,10,0" Text="Output Device:" />
-                <ComboBox x:Name="OutputDeviceComboBox" Grid.Column="4" />
+                <ComboBox x:Name="OutputDeviceComboBox"
+                          Grid.Column="4"
+                          SelectionChanged="OutputDeviceComboBox_SelectionChanged"
+                          Style="{StaticResource MidiDeviceComboBoxStyle}" />
 
                 <Button x:Name="RefreshButton"
                         Grid.Column="6"
@@ -229,7 +281,7 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1" Margin="0,18,0,14">
+        <Grid Grid.Row="2" Margin="0,18,0,14">
             <Grid.RowDefinitions>
                 <RowDefinition Height="52*" />
                 <RowDefinition Height="16" />
@@ -266,7 +318,20 @@
                             <DataGridTextColumn Width="85" Header="Note Name" IsReadOnly="True" Binding="{Binding InputNoteName}" />
                             <DataGridTextColumn Width="75" Header="Min Vel" Binding="{Binding MinimumVelocity, UpdateSourceTrigger=PropertyChanged}" />
                             <DataGridTextColumn Width="90" Header="Output Ch" Binding="{Binding OutputChannel, UpdateSourceTrigger=PropertyChanged}" />
-                            <DataGridTextColumn Width="65" Header="CC" Binding="{Binding OutputController, UpdateSourceTrigger=PropertyChanged}" />
+                            <DataGridTemplateColumn Width="240" Header="CC">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ComboBox ItemsSource="{Binding MidiControlChangeOptions, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                                                  DisplayMemberPath="DisplayName"
+                                                  SelectedValuePath="Number"
+                                                  SelectedValue="{Binding OutputController, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  MaxDropDownHeight="320"
+                                                  IsTextSearchEnabled="True"
+                                                  TextSearch.TextPath="DisplayName"
+                                                  ToolTip="{Binding SelectedItem.DisplayName, RelativeSource={RelativeSource Self}}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTextColumn Width="70" Header="Value" Binding="{Binding OutputValue, UpdateSourceTrigger=PropertyChanged}" />
                         </DataGrid.Columns>
                     </DataGrid>
@@ -334,7 +399,7 @@
             </Border>
         </Grid>
 
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="3">
             <TextBlock HorizontalAlignment="Left"
                        Foreground="{StaticResource MutedTextBrush}"
                        Text="Version 0.1.0" />

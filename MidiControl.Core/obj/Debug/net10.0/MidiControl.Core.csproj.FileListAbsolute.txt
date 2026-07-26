@@ -13,3 +13,15 @@ D:\Projects\GuitarProMidiControl\MidiControl.Core\obj\Debug\net10.0\MidiControl.
 D:\Projects\GuitarProMidiControl\MidiControl.Core\obj\Debug\net10.0\refint\MidiControl.Core.dll
 D:\Projects\GuitarProMidiControl\MidiControl.Core\obj\Debug\net10.0\MidiControl.Core.pdb
 D:\Projects\GuitarProMidiControl\MidiControl.Core\obj\Debug\net10.0\ref\MidiControl.Core.dll
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\BuildCheck\Melanchall_DryWetMidi_Native32.dll
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\BuildCheck\Melanchall_DryWetMidi_Native64.dll
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\BuildCheck\Melanchall_DryWetMidi_Native64.dylib
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\BuildCheck\MidiControl.Core.deps.json
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\BuildCheck\MidiControl.Core.dll
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\BuildCheck\MidiControl.Core.pdb
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\SolutionBuildCheck\Debug\net10.0\Melanchall_DryWetMidi_Native32.dll
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\SolutionBuildCheck\Debug\net10.0\Melanchall_DryWetMidi_Native64.dll
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\SolutionBuildCheck\Debug\net10.0\Melanchall_DryWetMidi_Native64.dylib
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\SolutionBuildCheck\Debug\net10.0\MidiControl.Core.deps.json
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\SolutionBuildCheck\Debug\net10.0\MidiControl.Core.dll
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\SolutionBuildCheck\Debug\net10.0\MidiControl.Core.pdb

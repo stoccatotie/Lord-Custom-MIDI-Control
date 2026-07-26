@@ -6,6 +6,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <Product>Lord Custom MIDI Control</Product>
+    <Description>Custom MIDI note to control command converter</Description>
+    <Authors>Lord Custom</Authors>
   </PropertyGroup>
 
   <ItemGroup>
