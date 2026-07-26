@@ -1,6 +1,7 @@
 using MidiControl.Core.Models;
 using MidiControl.Core.Services;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -16,11 +17,14 @@ public partial class MainWindow : Window
     private readonly MidiDeviceService _midiDeviceService;
     private readonly MidiConnectionService _midiConnectionService;
     private readonly SettingsService _settingsService;
+    private readonly AppSettings _loadedSettings;
     private readonly ObservableCollection<MidiMapping> _mappings = new();
     private readonly ObservableCollection<MidiLogEntry> _midiLogEntries = new();
     private List<MidiMapping> _lastAppliedMappings = new();
     private MidiMapping? _learningMapping;
     private bool _isMidiLearnActive;
+    private bool _isClosing;
+    private bool _autoConnectAttempted;
 
     public MainWindow()
     {
@@ -31,10 +35,11 @@ public partial class MainWindow : Window
         _settingsService = new SettingsService();
         _midiConnectionService.MessageReceived += MidiConnectionService_MessageReceived;
         _midiConnectionService.MidiLearnCaptured += MidiConnectionService_MidiLearnCaptured;
+        _midiConnectionService.ConnectionError += MidiConnectionService_ConnectionError;
 
-        var settings = _settingsService.Load();
+        _loadedSettings = _settingsService.Load();
 
-        foreach (var mapping in settings.Mappings)
+        foreach (var mapping in _loadedSettings.Mappings)
         {
             _mappings.Add(mapping.Clone());
         }
@@ -43,76 +48,150 @@ public partial class MainWindow : Window
         _lastAppliedMappings = _mappings.Select(mapping => mapping.Clone()).ToList();
         MappingsDataGrid.ItemsSource = _mappings;
         MidiMonitorListView.ItemsSource = _midiLogEntries;
+        AutoConnectCheckBox.IsChecked = _loadedSettings.AutoConnect;
         RefreshMidiDevices(
-            settings.InputDeviceName,
-            settings.OutputDeviceName,
+            _loadedSettings.InputDeviceName,
+            _loadedSettings.OutputDeviceName,
             usePreferredSelections: true);
+        UpdateConnectionUi(isRunning: false);
     }
 
-    protected override void OnClosed(EventArgs e)
+    protected override void OnClosing(CancelEventArgs e)
     {
-        _midiConnectionService.CancelMidiLearn();
-        ResetMidiLearnUi();
+        base.OnClosing(e);
+
+        if (e.Cancel || _isClosing)
+        {
+            return;
+        }
+
+        _isClosing = true;
         AppSettings settings;
 
         try
         {
-            settings = CreateSettingsForClosing();
-        }
-        catch
-        {
-            settings = CreateCurrentSettings(_lastAppliedMappings);
-        }
+            try
+            {
+                settings = CreateSettingsForClosing();
+            }
+            catch
+            {
+                settings = CreateCurrentSettings(_lastAppliedMappings);
+            }
 
-        _midiConnectionService.MessageReceived -= MidiConnectionService_MessageReceived;
-        _midiConnectionService.MidiLearnCaptured -= MidiConnectionService_MidiLearnCaptured;
-        _midiConnectionService.Stop();
-
-        try
-        {
-            _settingsService.Save(settings);
+            try
+            {
+                _settingsService.Save(settings);
+            }
+            catch
+            {
+                // Saving must never prevent MIDI ports from being released.
+            }
         }
-        catch
+        finally
         {
-            // The window is already closing; MIDI cleanup must still complete.
+            _midiConnectionService.CancelMidiLearn();
+            _midiConnectionService.Stop();
+            _midiConnectionService.MessageReceived -= MidiConnectionService_MessageReceived;
+            _midiConnectionService.MidiLearnCaptured -= MidiConnectionService_MidiLearnCaptured;
+            _midiConnectionService.ConnectionError -= MidiConnectionService_ConnectionError;
+            _midiConnectionService.Dispose();
         }
-
-        _midiConnectionService.Dispose();
-        base.OnClosed(e);
     }
 
     private void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_midiConnectionService.IsRunning)
+        {
+            return;
+        }
+
         RefreshMidiDevices();
+    }
+
+    private void Window_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (_autoConnectAttempted)
+        {
+            return;
+        }
+
+        _autoConnectAttempted = true;
+
+        if (!_loadedSettings.AutoConnect)
+        {
+            SetConnectionStatus(isRunning: false);
+            return;
+        }
+
+        var savedDevicesAreAvailable =
+            _loadedSettings.InputDeviceName is not null &&
+            _loadedSettings.OutputDeviceName is not null &&
+            string.Equals(
+                InputDeviceComboBox.SelectedItem as string,
+                _loadedSettings.InputDeviceName,
+                StringComparison.Ordinal) &&
+            string.Equals(
+                OutputDeviceComboBox.SelectedItem as string,
+                _loadedSettings.OutputDeviceName,
+                StringComparison.Ordinal);
+
+        if (!savedDevicesAreAvailable)
+        {
+            UpdateConnectionUi(isRunning: false);
+            SetStatus("Auto-connect failed: saved MIDI device is unavailable");
+            return;
+        }
+
+        TryStartMidiConnection();
     }
 
     private void StartButton_Click(object sender, RoutedEventArgs e)
     {
+        TryStartMidiConnection();
+    }
+
+    private bool TryStartMidiConnection()
+    {
+        if (_midiConnectionService.IsRunning)
+        {
+            return true;
+        }
+
+        if (!TryApplyMappings())
+        {
+            UpdateConnectionUi(isRunning: false);
+            return false;
+        }
+
         if (InputDeviceComboBox.SelectedItem is not string inputDeviceName)
         {
-            SetStoppedState("Select MIDI input device");
-            return;
+            UpdateConnectionUi(isRunning: false);
+            SetStatus("Select MIDI input device");
+            return false;
         }
 
         if (OutputDeviceComboBox.SelectedItem is not string outputDeviceName)
         {
-            SetStoppedState("Select MIDI output device");
-            return;
-        }
-
-        if (!TryApplyMappings(showSuccessStatus: false))
-        {
-            return;
+            UpdateConnectionUi(isRunning: false);
+            SetStatus("Select MIDI output device");
+            return false;
         }
 
         try
         {
             _midiConnectionService.Start(inputDeviceName, outputDeviceName);
-            SetRunningState();
+            UpdateConnectionUi(isRunning: true);
+            SetConnectionStatus(isRunning: true);
+            return true;
         }
         catch (Exception exception)
         {
-            SetStoppedState(exception.Message);
+            UpdateConnectionUi(isRunning: false);
+            SetStatus(string.IsNullOrWhiteSpace(exception.Message)
+                ? "MIDI connection could not be started"
+                : exception.Message);
+            return false;
         }
     }
 
@@ -120,7 +199,8 @@ public partial class MainWindow : Window
     {
         _midiConnectionService.Stop();
         ResetMidiLearnUi();
-        SetStoppedState("Stopped");
+        UpdateConnectionUi(isRunning: false);
+        SetConnectionStatus(isRunning: false);
     }
 
     private void ClearLogButton_Click(object sender, RoutedEventArgs e)
@@ -177,11 +257,11 @@ public partial class MainWindow : Window
     {
         if (_isMidiLearnActive)
         {
-            StatusText.Text = "Finish or cancel MIDI Learn first";
+            SetStatus("Finish or cancel MIDI Learn first");
             return;
         }
 
-        if (!TryApplyMappings(showSuccessStatus: false))
+        if (!TryApplyMappings())
         {
             return;
         }
@@ -189,17 +269,20 @@ public partial class MainWindow : Window
         try
         {
             _settingsService.Save(CreateCurrentSettings());
-            StatusText.Text = "Mappings applied and saved";
+            SetStatus(
+                $"Mappings applied and saved — {GetActiveMappingCount()} active mappings");
         }
         catch
         {
-            StatusText.Text = "Mappings applied, but settings could not be saved";
+            SetStatus(
+                $"Mappings applied, but settings could not be saved — " +
+                $"{GetActiveMappingCount()} active mappings");
         }
     }
 
     private void SaveSettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryApplyMappings(showSuccessStatus: false))
+        if (!TryApplyMappings())
         {
             return;
         }
@@ -207,13 +290,13 @@ public partial class MainWindow : Window
         try
         {
             _settingsService.Save(CreateCurrentSettings());
-            StatusText.Text = "Settings saved";
+            SetStatus("Settings saved");
         }
         catch (Exception exception)
         {
-            StatusText.Text = string.IsNullOrWhiteSpace(exception.Message)
+            SetStatus(string.IsNullOrWhiteSpace(exception.Message)
                 ? "Settings could not be saved"
-                : $"Settings could not be saved: {exception.Message}";
+                : $"Settings could not be saved: {exception.Message}");
         }
     }
 
@@ -226,13 +309,13 @@ public partial class MainWindow : Window
 
         if (MappingsDataGrid.SelectedItem is not MidiMapping mapping)
         {
-            StatusText.Text = "Select a mapping first";
+            SetStatus("Select a mapping first");
             return;
         }
 
         if (!_midiConnectionService.IsRunning)
         {
-            StatusText.Text = "Start MIDI connection first";
+            SetStatus("Start MIDI connection first");
             return;
         }
 
@@ -245,12 +328,12 @@ public partial class MainWindow : Window
             MidiLearnButton.IsEnabled = false;
             CancelLearnButton.Visibility = Visibility.Visible;
             CancelLearnButton.IsEnabled = true;
-            StatusText.Text = "MIDI Learn: play a note";
+            SetStatus("MIDI Learn: play a note");
         }
         catch (Exception exception)
         {
             ResetMidiLearnUi();
-            StatusText.Text = exception.Message;
+            SetStatus(exception.Message);
         }
     }
 
@@ -258,7 +341,8 @@ public partial class MainWindow : Window
     {
         _midiConnectionService.CancelMidiLearn();
         ResetMidiLearnUi();
-        StatusText.Text = "MIDI Learn cancelled";
+        SetStatus(
+            $"MIDI Learn cancelled — {GetConnectionStatus(_midiConnectionService.IsRunning)}");
     }
 
     private void MidiConnectionService_MessageReceived(object? sender, MidiMessageReceivedEventArgs e)
@@ -277,6 +361,34 @@ public partial class MainWindow : Window
                 e.Channel?.ToString() ?? string.Empty,
                 e.Data,
                 e.MappingName ?? string.Empty);
+
+            _midiLogEntries.Add(entry);
+
+            while (_midiLogEntries.Count > MaximumLogEntries)
+            {
+                _midiLogEntries.RemoveAt(0);
+            }
+
+            MidiMonitorListView.ScrollIntoView(entry);
+        });
+    }
+
+    private void MidiConnectionService_ConnectionError(object? sender, MidiConnectionErrorEventArgs e)
+    {
+        if (Dispatcher.HasShutdownStarted)
+        {
+            return;
+        }
+
+        Dispatcher.BeginInvoke(() =>
+        {
+            var entry = new MidiLogEntry(
+                e.Timestamp.ToString("HH:mm:ss.fff"),
+                "ERROR",
+                "Connection Error",
+                string.Empty,
+                e.Message,
+                string.Empty);
 
             _midiLogEntries.Add(entry);
 
@@ -310,8 +422,9 @@ public partial class MainWindow : Window
             mapping.InputNote = e.InputNote;
             SelectMapping(mapping);
             ResetMidiLearnUi();
-            StatusText.Text =
-                $"Learned Ch {e.InputChannel}, Note {e.InputNote} ({mapping.InputNoteName}). Press Apply Changes.";
+            SetStatus(
+                $"Learned Ch {e.InputChannel}, Note {e.InputNote} ({mapping.InputNoteName}). " +
+                $"Press Apply Changes. {GetConnectionStatus(_midiConnectionService.IsRunning)}");
         });
     }
 
@@ -332,6 +445,9 @@ public partial class MainWindow : Window
 
         var inputDeviceNames = _midiDeviceService.GetInputDeviceNames();
         var outputDeviceNames = _midiDeviceService.GetOutputDeviceNames();
+        var selectedDeviceDisappeared =
+            (selectedInput is not null && !inputDeviceNames.Contains(selectedInput)) ||
+            (selectedOutput is not null && !outputDeviceNames.Contains(selectedOutput));
 
         foreach (var deviceName in inputDeviceNames)
         {
@@ -348,15 +464,19 @@ public partial class MainWindow : Window
 
         if (inputDeviceNames.Count == 0)
         {
-            SetStoppedState("No MIDI input devices");
+            SetStatus("No MIDI input devices");
         }
         else if (outputDeviceNames.Count == 0)
         {
-            SetStoppedState("No MIDI output devices");
+            SetStatus("No MIDI output devices");
+        }
+        else if (selectedDeviceDisappeared)
+        {
+            SetStatus("Selected MIDI device is no longer available");
         }
         else
         {
-            SetStoppedState("Stopped");
+            SetConnectionStatus(isRunning: false);
         }
     }
 
@@ -372,18 +492,18 @@ public partial class MainWindow : Window
         }
     }
 
-    private bool TryApplyMappings(bool showSuccessStatus)
+    private bool TryApplyMappings()
     {
         if (_isMidiLearnActive)
         {
-            StatusText.Text = "Finish or cancel MIDI Learn first";
+            SetStatus("Finish or cancel MIDI Learn first");
             return false;
         }
 
         if (!MappingsDataGrid.CommitEdit(DataGridEditingUnit.Cell, true) ||
             !MappingsDataGrid.CommitEdit(DataGridEditingUnit.Row, true))
         {
-            StatusText.Text = "Correct the value currently being edited";
+            SetStatus("Correct the value currently being edited");
 
             if (MappingsDataGrid.CurrentItem is MidiMapping currentMapping)
             {
@@ -395,7 +515,7 @@ public partial class MainWindow : Window
 
         if (!ValidateMappings(out var errorMessage, out var invalidMapping))
         {
-            StatusText.Text = errorMessage;
+            SetStatus(errorMessage);
 
             if (invalidMapping is not null)
             {
@@ -407,11 +527,6 @@ public partial class MainWindow : Window
 
         _midiConnectionService.ReplaceMappings(_mappings);
         _lastAppliedMappings = _mappings.Select(mapping => mapping.Clone()).ToList();
-
-        if (showSuccessStatus)
-        {
-            StatusText.Text = "Mappings applied";
-        }
 
         return true;
     }
@@ -427,6 +542,7 @@ public partial class MainWindow : Window
         {
             InputDeviceName = InputDeviceComboBox.SelectedItem as string,
             OutputDeviceName = OutputDeviceComboBox.SelectedItem as string,
+            AutoConnect = AutoConnectCheckBox.IsChecked == true,
             Mappings = mappings.Select(mapping => mapping.Clone()).ToList()
         };
     }
@@ -515,25 +631,34 @@ public partial class MainWindow : Window
         CancelLearnButton.Visibility = Visibility.Collapsed;
     }
 
-    private void SetRunningState()
+    private void UpdateConnectionUi(bool isRunning)
     {
-        StartButton.IsEnabled = false;
-        StopButton.IsEnabled = true;
-        InputDeviceComboBox.IsEnabled = false;
-        OutputDeviceComboBox.IsEnabled = false;
-        RefreshButton.IsEnabled = false;
-        StatusIndicator.Fill = RunningBrush;
-        StatusText.Text = "Running";
+        StartButton.IsEnabled = !isRunning;
+        StopButton.IsEnabled = isRunning;
+        RefreshButton.IsEnabled = !isRunning;
+        InputDeviceComboBox.IsEnabled = !isRunning;
+        OutputDeviceComboBox.IsEnabled = !isRunning;
+        StatusIndicator.Fill = isRunning ? RunningBrush : StoppedBrush;
     }
 
-    private void SetStoppedState(string status)
+    private void SetStatus(string message)
     {
-        StartButton.IsEnabled = true;
-        StopButton.IsEnabled = false;
-        InputDeviceComboBox.IsEnabled = true;
-        OutputDeviceComboBox.IsEnabled = true;
-        RefreshButton.IsEnabled = true;
-        StatusIndicator.Fill = StoppedBrush;
-        StatusText.Text = status;
+        StatusText.Text = message;
+    }
+
+    private void SetConnectionStatus(bool isRunning)
+    {
+        SetStatus(GetConnectionStatus(isRunning));
+    }
+
+    private string GetConnectionStatus(bool isRunning)
+    {
+        var state = isRunning ? "Running" : "Stopped";
+        return $"{state} — {GetActiveMappingCount()} active mappings";
+    }
+
+    private int GetActiveMappingCount()
+    {
+        return _midiConnectionService.Mappings.Count(mapping => mapping.IsEnabled);
     }
 }

@@ -7,6 +7,7 @@
         MinWidth="1000"
         MinHeight="650"
         WindowStartupLocation="CenterScreen"
+        Loaded="Window_Loaded"
         Background="#10131A"
         Foreground="#EEF2F7"
         FontFamily="Segoe UI">
@@ -184,6 +185,8 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="18" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Column="0" Margin="0,0,10,0" Text="Input Device:" />
@@ -207,7 +210,13 @@
                         IsEnabled="False"
                         Click="StopButton_Click" />
 
-                <StackPanel Grid.Column="12" Orientation="Horizontal" VerticalAlignment="Center">
+                <CheckBox x:Name="AutoConnectCheckBox"
+                          Grid.Column="12"
+                          VerticalAlignment="Center"
+                          Foreground="#DCE3EC"
+                          Content="Auto-connect on startup" />
+
+                <StackPanel Grid.Column="14" Orientation="Horizontal" VerticalAlignment="Center">
                     <Ellipse x:Name="StatusIndicator"
                              Width="11"
                              Height="11"
@@ -325,9 +334,13 @@
             </Border>
         </Grid>
 
-        <Button Grid.Row="2"
-                HorizontalAlignment="Right"
-                Content="Clear Log"
-                Click="ClearLogButton_Click" />
+        <Grid Grid.Row="2">
+            <TextBlock HorizontalAlignment="Left"
+                       Foreground="{StaticResource MutedTextBrush}"
+                       Text="Version 0.1.0" />
+            <Button HorizontalAlignment="Right"
+                    Content="Clear Log"
+                    Click="ClearLogButton_Click" />
+        </Grid>
     </Grid>
 </Window>

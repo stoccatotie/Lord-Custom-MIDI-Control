@@ -41,6 +41,8 @@ public sealed class MidiConnectionService : IDisposable
 
     public event EventHandler<MidiLearnCapturedEventArgs>? MidiLearnCaptured;
 
+    public event EventHandler<MidiConnectionErrorEventArgs>? ConnectionError;
+
     public bool IsRunning { get; private set; }
 
     public string? InputDeviceName { get; private set; }
@@ -137,7 +139,17 @@ public sealed class MidiConnectionService : IDisposable
                 _outputDevice = GetOutputDevice(outputDeviceName);
 
                 _inputDevice.EventReceived += InputDevice_EventReceived;
-                _inputDevice.StartEventsListening();
+                _inputDevice.ErrorOccurred += MidiDevice_ErrorOccurred;
+                _outputDevice.ErrorOccurred += MidiDevice_ErrorOccurred;
+
+                try
+                {
+                    _inputDevice.StartEventsListening();
+                }
+                catch
+                {
+                    throw new InvalidOperationException("MIDI event listening could not be started.");
+                }
 
                 InputDeviceName = inputDeviceName;
                 OutputDeviceName = outputDeviceName;
@@ -171,6 +183,7 @@ public sealed class MidiConnectionService : IDisposable
         if (inputDevice is not null)
         {
             inputDevice.EventReceived -= InputDevice_EventReceived;
+            inputDevice.ErrorOccurred -= MidiDevice_ErrorOccurred;
 
             try
             {
@@ -193,6 +206,8 @@ public sealed class MidiConnectionService : IDisposable
 
         if (outputDevice is not null)
         {
+            outputDevice.ErrorOccurred -= MidiDevice_ErrorOccurred;
+
             try
             {
                 outputDevice.Dispose();
@@ -212,42 +227,98 @@ public sealed class MidiConnectionService : IDisposable
 
     private static InputDevice GetInputDevice(string deviceName)
     {
+        ICollection<InputDevice> devices;
+
         try
         {
-            return InputDevice.GetByName(deviceName);
+            devices = InputDevice.GetAll();
         }
-        catch (Exception exception)
+        catch
         {
-            throw new InvalidOperationException(
-                $"MIDI input device '{deviceName}' was not found or could not be opened.",
-                exception);
+            throw new InvalidOperationException("MIDI input device could not be opened.");
         }
+
+        var selectedDevice = devices.FirstOrDefault(device =>
+            string.Equals(device.Name, deviceName, StringComparison.Ordinal));
+
+        foreach (var device in devices)
+        {
+            if (!ReferenceEquals(device, selectedDevice))
+            {
+                TryDispose(device);
+            }
+        }
+
+        return selectedDevice
+            ?? throw new InvalidOperationException("MIDI input device was not found.");
     }
 
     private static OutputDevice GetOutputDevice(string deviceName)
     {
+        ICollection<OutputDevice> devices;
+
         try
         {
-            return OutputDevice.GetByName(deviceName);
+            devices = OutputDevice.GetAll();
         }
-        catch (Exception exception)
+        catch
         {
-            throw new InvalidOperationException(
-                $"MIDI output device '{deviceName}' was not found or could not be opened.",
-                exception);
+            throw new InvalidOperationException("MIDI output device could not be opened.");
+        }
+
+        var selectedDevice = devices.FirstOrDefault(device =>
+            string.Equals(device.Name, deviceName, StringComparison.Ordinal));
+
+        foreach (var device in devices)
+        {
+            if (!ReferenceEquals(device, selectedDevice))
+            {
+                TryDispose(device);
+            }
+        }
+
+        return selectedDevice
+            ?? throw new InvalidOperationException("MIDI output device was not found.");
+    }
+
+    private static void TryDispose(IDisposable resource)
+    {
+        try
+        {
+            resource.Dispose();
+        }
+        catch
+        {
+            // Device discovery cleanup must not hide the actual Start result.
         }
     }
 
     private void InputDevice_EventReceived(object? sender, MidiEventReceivedEventArgs e)
     {
-        MessageReceived?.Invoke(this, CreateMessage(e.Event));
-
-        if (TryCaptureMidiLearn(e.Event))
+        try
         {
-            return;
-        }
+            MessageReceived?.Invoke(this, CreateMessage(e.Event));
 
-        TryProcessMapping(e.Event);
+            if (TryCaptureMidiLearn(e.Event))
+            {
+                return;
+            }
+
+            TryProcessMapping(e.Event);
+        }
+        catch (Exception exception)
+        {
+            RaiseConnectionError(GetShortErrorMessage(
+                exception,
+                "Incoming MIDI message could not be processed."));
+        }
+    }
+
+    private void MidiDevice_ErrorOccurred(object? sender, ErrorOccurredEventArgs e)
+    {
+        RaiseConnectionError(GetShortErrorMessage(
+            e.Exception,
+            "The MIDI device reported an unexpected error."));
     }
 
     private bool TryCaptureMidiLearn(MidiEvent midiEvent)
@@ -286,6 +357,7 @@ public sealed class MidiConnectionService : IDisposable
         }
 
         var results = new List<MidiMessageReceivedEventArgs>();
+        var connectionErrors = new List<string>();
 
         lock (_syncRoot)
         {
@@ -349,13 +421,8 @@ public sealed class MidiConnectionService : IDisposable
                         ? "Failed to send the MIDI message."
                         : exception.Message;
 
-                    results.Add(new MidiMessageReceivedEventArgs(
-                        DateTime.Now,
-                        "ERROR",
-                        "Send Error",
-                        null,
-                        errorMessage,
-                        mappingName));
+                    connectionErrors.Add(
+                        $"{mappingName}: MIDI message could not be sent. {errorMessage}");
                 }
             }
         }
@@ -364,6 +431,25 @@ public sealed class MidiConnectionService : IDisposable
         {
             MessageReceived?.Invoke(this, result);
         }
+
+        foreach (var error in connectionErrors)
+        {
+            RaiseConnectionError(error);
+        }
+    }
+
+    private void RaiseConnectionError(string message)
+    {
+        ConnectionError?.Invoke(
+            this,
+            new MidiConnectionErrorEventArgs(DateTime.Now, message));
+    }
+
+    private static string GetShortErrorMessage(Exception exception, string fallback)
+    {
+        return string.IsNullOrWhiteSpace(exception.Message)
+            ? fallback
+            : exception.Message;
     }
 
     private static string? ValidateMapping(MidiMapping mapping)
