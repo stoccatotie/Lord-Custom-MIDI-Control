@@ -17,6 +17,7 @@ public sealed class MidiConnectionService : IDisposable
     private readonly List<MidiMapping> _mappings;
     private InputDevice? _inputDevice;
     private OutputDevice? _outputDevice;
+    private bool _isMidiLearnActive;
 
     public MidiConnectionService()
     {
@@ -38,11 +39,24 @@ public sealed class MidiConnectionService : IDisposable
 
     public event EventHandler<MidiMessageReceivedEventArgs>? MessageReceived;
 
+    public event EventHandler<MidiLearnCapturedEventArgs>? MidiLearnCaptured;
+
     public bool IsRunning { get; private set; }
 
     public string? InputDeviceName { get; private set; }
 
     public string? OutputDeviceName { get; private set; }
+
+    public bool IsMidiLearnActive
+    {
+        get
+        {
+            lock (_syncRoot)
+            {
+                return _isMidiLearnActive;
+            }
+        }
+    }
 
     public IReadOnlyList<MidiMapping> Mappings
     {
@@ -69,6 +83,32 @@ public sealed class MidiConnectionService : IDisposable
         {
             _mappings.Clear();
             _mappings.AddRange(copies);
+        }
+    }
+
+    public void BeginMidiLearn()
+    {
+        lock (_syncRoot)
+        {
+            if (!IsRunning)
+            {
+                throw new InvalidOperationException("MIDI connection is not running.");
+            }
+
+            if (_isMidiLearnActive)
+            {
+                throw new InvalidOperationException("MIDI Learn is already active.");
+            }
+
+            _isMidiLearnActive = true;
+        }
+    }
+
+    public void CancelMidiLearn()
+    {
+        lock (_syncRoot)
+        {
+            _isMidiLearnActive = false;
         }
     }
 
@@ -119,6 +159,7 @@ public sealed class MidiConnectionService : IDisposable
         lock (_syncRoot)
         {
             IsRunning = false;
+            _isMidiLearnActive = false;
             inputDevice = _inputDevice;
             outputDevice = _outputDevice;
             _inputDevice = null;
@@ -200,7 +241,41 @@ public sealed class MidiConnectionService : IDisposable
     private void InputDevice_EventReceived(object? sender, MidiEventReceivedEventArgs e)
     {
         MessageReceived?.Invoke(this, CreateMessage(e.Event));
+
+        if (TryCaptureMidiLearn(e.Event))
+        {
+            return;
+        }
+
         TryProcessMapping(e.Event);
+    }
+
+    private bool TryCaptureMidiLearn(MidiEvent midiEvent)
+    {
+        if (midiEvent is not NoteOnEvent noteOn || (int)noteOn.Velocity <= 0)
+        {
+            return false;
+        }
+
+        MidiLearnCapturedEventArgs? capturedEvent = null;
+
+        lock (_syncRoot)
+        {
+            if (!_isMidiLearnActive || !IsRunning)
+            {
+                return false;
+            }
+
+            _isMidiLearnActive = false;
+            capturedEvent = new MidiLearnCapturedEventArgs(
+                (int)noteOn.Channel + 1,
+                (int)noteOn.NoteNumber,
+                (int)noteOn.Velocity,
+                DateTime.Now);
+        }
+
+        MidiLearnCaptured?.Invoke(this, capturedEvent);
+        return true;
     }
 
     private void TryProcessMapping(MidiEvent midiEvent)
@@ -349,12 +424,18 @@ public sealed class MidiConnectionService : IDisposable
             _ => (midiEvent.GetType().Name, midiEvent.ToString() ?? string.Empty)
         };
 
+        var receivedNoteOn = midiEvent as NoteOnEvent;
+        var velocity = receivedNoteOn is null ? (int?)null : (int)receivedNoteOn.Velocity;
+
         return new MidiMessageReceivedEventArgs(
             DateTime.Now,
             "INPUT",
             messageType,
             channel,
-            data);
+            data,
+            noteNumber: receivedNoteOn is null ? null : (int)receivedNoteOn.NoteNumber,
+            velocity: velocity,
+            isNoteOn: receivedNoteOn is not null && velocity > 0);
     }
 
     private static string FormatNote(SevenBitNumber noteNumber, SevenBitNumber velocity)

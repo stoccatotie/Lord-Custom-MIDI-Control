@@ -17,6 +17,8 @@ public partial class MainWindow : Window
     private readonly MidiConnectionService _midiConnectionService;
     private readonly ObservableCollection<MidiMapping> _mappings = new();
     private readonly ObservableCollection<MidiLogEntry> _midiLogEntries = new();
+    private MidiMapping? _learningMapping;
+    private bool _isMidiLearnActive;
 
     public MainWindow()
     {
@@ -25,6 +27,7 @@ public partial class MainWindow : Window
         _midiDeviceService = new MidiDeviceService();
         _midiConnectionService = new MidiConnectionService();
         _midiConnectionService.MessageReceived += MidiConnectionService_MessageReceived;
+        _midiConnectionService.MidiLearnCaptured += MidiConnectionService_MidiLearnCaptured;
 
         foreach (var mapping in _midiConnectionService.Mappings)
         {
@@ -39,7 +42,9 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _midiConnectionService.MessageReceived -= MidiConnectionService_MessageReceived;
+        _midiConnectionService.MidiLearnCaptured -= MidiConnectionService_MidiLearnCaptured;
         _midiConnectionService.Stop();
+        ResetMidiLearnUi();
         _midiConnectionService.Dispose();
         base.OnClosed(e);
     }
@@ -82,6 +87,7 @@ public partial class MainWindow : Window
     private void StopButton_Click(object sender, RoutedEventArgs e)
     {
         _midiConnectionService.Stop();
+        ResetMidiLearnUi();
         SetStoppedState("Stopped");
     }
 
@@ -102,6 +108,12 @@ public partial class MainWindow : Window
         if (MappingsDataGrid.SelectedItem is not MidiMapping mapping)
         {
             return;
+        }
+
+        if (ReferenceEquals(mapping, _learningMapping))
+        {
+            _midiConnectionService.CancelMidiLearn();
+            ResetMidiLearnUi();
         }
 
         var index = _mappings.IndexOf(mapping);
@@ -131,7 +143,57 @@ public partial class MainWindow : Window
 
     private void ApplyChangesButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_isMidiLearnActive)
+        {
+            StatusText.Text = "Finish or cancel MIDI Learn first";
+            return;
+        }
+
         TryApplyMappings(showSuccessStatus: true);
+    }
+
+    private void MidiLearnButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isMidiLearnActive)
+        {
+            return;
+        }
+
+        if (MappingsDataGrid.SelectedItem is not MidiMapping mapping)
+        {
+            StatusText.Text = "Select a mapping first";
+            return;
+        }
+
+        if (!_midiConnectionService.IsRunning)
+        {
+            StatusText.Text = "Start MIDI connection first";
+            return;
+        }
+
+        try
+        {
+            _learningMapping = mapping;
+            _midiConnectionService.BeginMidiLearn();
+            _isMidiLearnActive = true;
+            MidiLearnButton.Content = "Listening...";
+            MidiLearnButton.IsEnabled = false;
+            CancelLearnButton.Visibility = Visibility.Visible;
+            CancelLearnButton.IsEnabled = true;
+            StatusText.Text = "MIDI Learn: play a note";
+        }
+        catch (Exception exception)
+        {
+            ResetMidiLearnUi();
+            StatusText.Text = exception.Message;
+        }
+    }
+
+    private void CancelLearnButton_Click(object sender, RoutedEventArgs e)
+    {
+        _midiConnectionService.CancelMidiLearn();
+        ResetMidiLearnUi();
+        StatusText.Text = "MIDI Learn cancelled";
     }
 
     private void MidiConnectionService_MessageReceived(object? sender, MidiMessageReceivedEventArgs e)
@@ -159,6 +221,32 @@ public partial class MainWindow : Window
             }
 
             MidiMonitorListView.ScrollIntoView(entry);
+        });
+    }
+
+    private void MidiConnectionService_MidiLearnCaptured(object? sender, MidiLearnCapturedEventArgs e)
+    {
+        if (Dispatcher.HasShutdownStarted)
+        {
+            return;
+        }
+
+        Dispatcher.BeginInvoke(() =>
+        {
+            var mapping = _learningMapping;
+
+            if (!_isMidiLearnActive || mapping is null || !_mappings.Contains(mapping))
+            {
+                ResetMidiLearnUi();
+                return;
+            }
+
+            mapping.InputChannel = e.InputChannel;
+            mapping.InputNote = e.InputNote;
+            SelectMapping(mapping);
+            ResetMidiLearnUi();
+            StatusText.Text =
+                $"Learned Ch {e.InputChannel}, Note {e.InputNote} ({mapping.InputNoteName}). Press Apply Changes.";
         });
     }
 
@@ -214,6 +302,12 @@ public partial class MainWindow : Window
 
     private bool TryApplyMappings(bool showSuccessStatus)
     {
+        if (_isMidiLearnActive)
+        {
+            StatusText.Text = "Finish or cancel MIDI Learn first";
+            return false;
+        }
+
         if (!MappingsDataGrid.CommitEdit(DataGridEditingUnit.Cell, true) ||
             !MappingsDataGrid.CommitEdit(DataGridEditingUnit.Row, true))
         {
@@ -307,6 +401,16 @@ public partial class MainWindow : Window
         {
             MappingsDataGrid.BeginEdit();
         }
+    }
+
+    private void ResetMidiLearnUi()
+    {
+        _learningMapping = null;
+        _isMidiLearnActive = false;
+        MidiLearnButton.Content = "MIDI Learn";
+        MidiLearnButton.IsEnabled = true;
+        CancelLearnButton.IsEnabled = false;
+        CancelLearnButton.Visibility = Visibility.Collapsed;
     }
 
     private void SetRunningState()

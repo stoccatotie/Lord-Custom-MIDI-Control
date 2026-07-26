@@ -266,6 +266,16 @@
                         <Button Margin="0,0,10,0" Content="Add Rule" Click="AddRuleButton_Click" />
                         <Button Margin="0,0,10,0" Content="Delete Rule" Click="DeleteRuleButton_Click" />
                         <Button Margin="0,0,10,0" Content="Duplicate Rule" Click="DuplicateRuleButton_Click" />
+                        <Button x:Name="MidiLearnButton"
+                                Margin="0,0,10,0"
+                                Content="MIDI Learn"
+                                Click="MidiLearnButton_Click" />
+                        <Button x:Name="CancelLearnButton"
+                                Margin="0,0,10,0"
+                                Content="Cancel Learn"
+                                IsEnabled="False"
+                                Visibility="Collapsed"
+                                Click="CancelLearnButton_Click" />
                         <Button Content="Apply Changes"
                                 Style="{StaticResource AccentButtonStyle}"
                                 Click="ApplyChangesButton_Click" />
