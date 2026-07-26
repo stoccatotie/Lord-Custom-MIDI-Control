@@ -1,10 +1,14 @@
 {
   "version": 2,
-  "dgSpecHash": "dJJuLNaNevA=",
+  "dgSpecHash": "bkBzZAKTkTk=",
   "success": true,
   "projectFilePath": "D:\\Projects\\GuitarProMidiControl\\MidiControl.Core\\MidiControl.Core.csproj",
   "expectedPackageFiles": [
-    "C:\\Users\\dloje\\.nuget\\packages\\melanchall.drywetmidi\\8.0.3\\melanchall.drywetmidi.8.0.3.nupkg.sha512"
+    "C:\\Users\\dloje\\.nuget\\packages\\melanchall.drywetmidi\\8.0.3\\melanchall.drywetmidi.8.0.3.nupkg.sha512",
+    "C:\\Users\\dloje\\.nuget\\packages\\microsoft.net.illink.tasks\\10.0.10\\microsoft.net.illink.tasks.10.0.10.nupkg.sha512",
+    "C:\\Users\\dloje\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\10.0.10\\microsoft.netcore.app.runtime.win-x64.10.0.10.nupkg.sha512",
+    "C:\\Users\\dloje\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\10.0.10\\microsoft.windowsdesktop.app.runtime.win-x64.10.0.10.nupkg.sha512",
+    "C:\\Users\\dloje\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\10.0.10\\microsoft.aspnetcore.app.runtime.win-x64.10.0.10.nupkg.sha512"
   ],
   "logs": []
 }

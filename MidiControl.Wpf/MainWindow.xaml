@@ -427,7 +427,7 @@
         <Grid Grid.Row="3">
             <TextBlock HorizontalAlignment="Left"
                        Foreground="{StaticResource MutedTextBrush}"
-                       Text="Version 0.1.0" />
+                       Text="Version 1.0.0" />
             <Button HorizontalAlignment="Right"
                     Content="Clear Log"
                     Click="ClearLogButton_Click" />

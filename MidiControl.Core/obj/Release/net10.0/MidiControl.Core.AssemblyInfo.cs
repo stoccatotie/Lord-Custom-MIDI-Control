@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MidiControl.Core")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5b511b6f8c7a383d4a962e6f566a1ab7647148dc")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+770558559c9eb7d630b9a7f7655cba8953f6c2f9")]
 [assembly: System.Reflection.AssemblyProductAttribute("MidiControl.Core")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MidiControl.Core")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

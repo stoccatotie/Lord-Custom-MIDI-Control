@@ -1,0 +1,4 @@
+D:\Projects\GuitarProMidiControl\publish\LordCustomMidiControl\Lord Custom MIDI Control.pdb
+D:\Projects\GuitarProMidiControl\publish\LordCustomMidiControl\Melanchall_DryWetMidi_Native64.dylib
+D:\Projects\GuitarProMidiControl\publish\LordCustomMidiControl\MidiControl.Core.pdb
+D:\Projects\GuitarProMidiControl\publish\LordCustomMidiControl\Lord Custom MIDI Control.exe

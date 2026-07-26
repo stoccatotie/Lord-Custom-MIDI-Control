@@ -1,0 +1,11 @@
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\Release\net10.0-windows\publish\Lord Custom MIDI Control.exe
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\Release\net10.0-windows\publish\Melanchall_DryWetMidi_Native32.dll
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\Release\net10.0-windows\publish\Melanchall_DryWetMidi_Native64.dll
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\Release\net10.0-windows\publish\Melanchall_DryWetMidi_Native64.dylib
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\Release\net10.0-windows\publish\Lord Custom MIDI Control.dll
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\Release\net10.0-windows\publish\Lord Custom MIDI Control.deps.json
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\Release\net10.0-windows\publish\Lord Custom MIDI Control.runtimeconfig.json
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\Release\net10.0-windows\publish\Lord Custom MIDI Control.pdb
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\Release\net10.0-windows\publish\Melanchall.DryWetMidi.dll
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\Release\net10.0-windows\publish\MidiControl.Core.dll
+D:\Projects\GuitarProMidiControl\MidiControl.Wpf\bin\Release\net10.0-windows\publish\MidiControl.Core.pdb

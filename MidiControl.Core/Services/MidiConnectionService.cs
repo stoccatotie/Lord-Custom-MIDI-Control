@@ -510,18 +510,12 @@ public sealed class MidiConnectionService : IDisposable
             _ => (midiEvent.GetType().Name, midiEvent.ToString() ?? string.Empty)
         };
 
-        var receivedNoteOn = midiEvent as NoteOnEvent;
-        var velocity = receivedNoteOn is null ? (int?)null : (int)receivedNoteOn.Velocity;
-
         return new MidiMessageReceivedEventArgs(
             DateTime.Now,
             "INPUT",
             messageType,
             channel,
-            data,
-            noteNumber: receivedNoteOn is null ? null : (int)receivedNoteOn.NoteNumber,
-            velocity: velocity,
-            isNoteOn: receivedNoteOn is not null && velocity > 0);
+            data);
     }
 
     private static string FormatNote(SevenBitNumber noteNumber, SevenBitNumber velocity)
