@@ -6,12 +6,19 @@ namespace MidiControl.Core.Services;
 
 public sealed class MidiConnectionService : IDisposable
 {
+    private const int MappedInputChannel = 0;
+    private const int MappedNoteNumber = 67;
+    private const int MappedOutputChannel = 0;
+    private const int MappedControlNumber = 20;
+    private const int MappedControlValue = 127;
+
     private static readonly string[] NoteNames =
     {
         "C", "C#", "D", "D#", "E", "F",
         "F#", "G", "G#", "A", "A#", "B"
     };
 
+    private readonly object _syncRoot = new();
     private InputDevice? _inputDevice;
     private OutputDevice? _outputDevice;
 
@@ -25,60 +32,75 @@ public sealed class MidiConnectionService : IDisposable
 
     public void Start(string inputDeviceName, string outputDeviceName)
     {
-        if (IsRunning)
+        lock (_syncRoot)
         {
-            throw new InvalidOperationException("MIDI connection is already running.");
-        }
+            if (IsRunning)
+            {
+                throw new InvalidOperationException("MIDI connection is already running.");
+            }
 
-        if (string.IsNullOrWhiteSpace(inputDeviceName))
-        {
-            throw new ArgumentException("MIDI input device name is required.", nameof(inputDeviceName));
-        }
+            if (string.IsNullOrWhiteSpace(inputDeviceName))
+            {
+                throw new ArgumentException("MIDI input device name is required.", nameof(inputDeviceName));
+            }
 
-        if (string.IsNullOrWhiteSpace(outputDeviceName))
-        {
-            throw new ArgumentException("MIDI output device name is required.", nameof(outputDeviceName));
-        }
+            if (string.IsNullOrWhiteSpace(outputDeviceName))
+            {
+                throw new ArgumentException("MIDI output device name is required.", nameof(outputDeviceName));
+            }
 
-        try
-        {
-            _inputDevice = GetInputDevice(inputDeviceName);
-            _outputDevice = GetOutputDevice(outputDeviceName);
+            try
+            {
+                _inputDevice = GetInputDevice(inputDeviceName);
+                _outputDevice = GetOutputDevice(outputDeviceName);
 
-            _inputDevice.EventReceived += InputDevice_EventReceived;
-            _inputDevice.StartEventsListening();
+                _inputDevice.EventReceived += InputDevice_EventReceived;
+                _inputDevice.StartEventsListening();
 
-            InputDeviceName = inputDeviceName;
-            OutputDeviceName = outputDeviceName;
-            IsRunning = true;
-        }
-        catch
-        {
-            Stop();
-            throw;
+                InputDeviceName = inputDeviceName;
+                OutputDeviceName = outputDeviceName;
+                IsRunning = true;
+            }
+            catch
+            {
+                Stop();
+                throw;
+            }
         }
     }
 
     public void Stop()
     {
-        IsRunning = false;
+        InputDevice? inputDevice;
+        OutputDevice? outputDevice;
 
-        if (_inputDevice is not null)
+        lock (_syncRoot)
         {
+            IsRunning = false;
+            inputDevice = _inputDevice;
+            outputDevice = _outputDevice;
+            _inputDevice = null;
+            _outputDevice = null;
+            InputDeviceName = null;
+            OutputDeviceName = null;
+        }
+
+        if (inputDevice is not null)
+        {
+            inputDevice.EventReceived -= InputDevice_EventReceived;
+
             try
             {
-                _inputDevice.StopEventsListening();
+                inputDevice.StopEventsListening();
             }
             catch
             {
                 // The device can already be disconnected. Cleanup must still continue.
             }
 
-            _inputDevice.EventReceived -= InputDevice_EventReceived;
-
             try
             {
-                _inputDevice.Dispose();
+                inputDevice.Dispose();
             }
             catch
             {
@@ -86,11 +108,11 @@ public sealed class MidiConnectionService : IDisposable
             }
         }
 
-        if (_outputDevice is not null)
+        if (outputDevice is not null)
         {
             try
             {
-                _outputDevice.Dispose();
+                outputDevice.Dispose();
             }
             catch
             {
@@ -98,10 +120,6 @@ public sealed class MidiConnectionService : IDisposable
             }
         }
 
-        _inputDevice = null;
-        _outputDevice = null;
-        InputDeviceName = null;
-        OutputDeviceName = null;
     }
 
     public void Dispose()
@@ -140,6 +158,62 @@ public sealed class MidiConnectionService : IDisposable
     private void InputDevice_EventReceived(object? sender, MidiEventReceivedEventArgs e)
     {
         MessageReceived?.Invoke(this, CreateMessage(e.Event));
+        TryProcessMapping(e.Event);
+    }
+
+    private void TryProcessMapping(MidiEvent midiEvent)
+    {
+        // Temporary hardcoded mapping. Will be replaced by configurable mappings.
+        if (midiEvent is not NoteOnEvent noteOn ||
+            (int)noteOn.Channel != MappedInputChannel ||
+            (int)noteOn.NoteNumber != MappedNoteNumber ||
+            (int)noteOn.Velocity <= 0)
+        {
+            return;
+        }
+
+        MidiMessageReceivedEventArgs? result = null;
+
+        lock (_syncRoot)
+        {
+            if (!IsRunning || _outputDevice is null)
+            {
+                return;
+            }
+
+            var controlChange = new ControlChangeEvent(
+                (SevenBitNumber)MappedControlNumber,
+                (SevenBitNumber)MappedControlValue)
+            {
+                Channel = (FourBitNumber)MappedOutputChannel
+            };
+
+            try
+            {
+                _outputDevice.SendEvent(controlChange);
+                result = new MidiMessageReceivedEventArgs(
+                    DateTime.Now,
+                    "OUTPUT",
+                    "Control Change",
+                    MappedOutputChannel + 1,
+                    $"CC {MappedControlNumber}, Value {MappedControlValue}");
+            }
+            catch (Exception exception)
+            {
+                var errorMessage = string.IsNullOrWhiteSpace(exception.Message)
+                    ? "Failed to send the MIDI message."
+                    : exception.Message;
+
+                result = new MidiMessageReceivedEventArgs(
+                    DateTime.Now,
+                    "ERROR",
+                    "Send Error",
+                    null,
+                    errorMessage);
+            }
+        }
+
+        MessageReceived?.Invoke(this, result);
     }
 
     private static MidiMessageReceivedEventArgs CreateMessage(MidiEvent midiEvent)
