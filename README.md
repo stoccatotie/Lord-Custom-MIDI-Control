@@ -23,7 +23,6 @@ A Windows utility that converts incoming MIDI notes into MIDI Control Change mes
 
 ![Lord Custom MIDI Control](assets/screenshot.png)
 
-
 ## Download
 
 Latest release:
