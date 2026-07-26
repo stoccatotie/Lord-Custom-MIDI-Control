@@ -277,8 +277,11 @@
                                 Visibility="Collapsed"
                                 Click="CancelLearnButton_Click" />
                         <Button Content="Apply Changes"
+                                Margin="0,0,10,0"
                                 Style="{StaticResource AccentButtonStyle}"
                                 Click="ApplyChangesButton_Click" />
+                        <Button Content="Save Settings"
+                                Click="SaveSettingsButton_Click" />
                     </StackPanel>
                 </Grid>
             </Border>

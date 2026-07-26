@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Serialization;
 
 namespace MidiControl.Core.Models;
 
@@ -53,6 +54,7 @@ public sealed class MidiMapping : INotifyPropertyChanged
         }
     }
 
+    [JsonIgnore]
     public string InputNoteName => GetNoteName(InputNote);
 
     public int MinimumVelocity

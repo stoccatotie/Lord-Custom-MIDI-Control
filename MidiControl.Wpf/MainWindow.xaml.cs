@@ -15,8 +15,10 @@ public partial class MainWindow : Window
 
     private readonly MidiDeviceService _midiDeviceService;
     private readonly MidiConnectionService _midiConnectionService;
+    private readonly SettingsService _settingsService;
     private readonly ObservableCollection<MidiMapping> _mappings = new();
     private readonly ObservableCollection<MidiLogEntry> _midiLogEntries = new();
+    private List<MidiMapping> _lastAppliedMappings = new();
     private MidiMapping? _learningMapping;
     private bool _isMidiLearnActive;
 
@@ -26,25 +28,55 @@ public partial class MainWindow : Window
 
         _midiDeviceService = new MidiDeviceService();
         _midiConnectionService = new MidiConnectionService();
+        _settingsService = new SettingsService();
         _midiConnectionService.MessageReceived += MidiConnectionService_MessageReceived;
         _midiConnectionService.MidiLearnCaptured += MidiConnectionService_MidiLearnCaptured;
 
-        foreach (var mapping in _midiConnectionService.Mappings)
+        var settings = _settingsService.Load();
+
+        foreach (var mapping in settings.Mappings)
         {
             _mappings.Add(mapping.Clone());
         }
 
+        _midiConnectionService.ReplaceMappings(_mappings);
+        _lastAppliedMappings = _mappings.Select(mapping => mapping.Clone()).ToList();
         MappingsDataGrid.ItemsSource = _mappings;
         MidiMonitorListView.ItemsSource = _midiLogEntries;
-        RefreshMidiDevices();
+        RefreshMidiDevices(
+            settings.InputDeviceName,
+            settings.OutputDeviceName,
+            usePreferredSelections: true);
     }
 
     protected override void OnClosed(EventArgs e)
     {
+        _midiConnectionService.CancelMidiLearn();
+        ResetMidiLearnUi();
+        AppSettings settings;
+
+        try
+        {
+            settings = CreateSettingsForClosing();
+        }
+        catch
+        {
+            settings = CreateCurrentSettings(_lastAppliedMappings);
+        }
+
         _midiConnectionService.MessageReceived -= MidiConnectionService_MessageReceived;
         _midiConnectionService.MidiLearnCaptured -= MidiConnectionService_MidiLearnCaptured;
         _midiConnectionService.Stop();
-        ResetMidiLearnUi();
+
+        try
+        {
+            _settingsService.Save(settings);
+        }
+        catch
+        {
+            // The window is already closing; MIDI cleanup must still complete.
+        }
+
         _midiConnectionService.Dispose();
         base.OnClosed(e);
     }
@@ -149,7 +181,40 @@ public partial class MainWindow : Window
             return;
         }
 
-        TryApplyMappings(showSuccessStatus: true);
+        if (!TryApplyMappings(showSuccessStatus: false))
+        {
+            return;
+        }
+
+        try
+        {
+            _settingsService.Save(CreateCurrentSettings());
+            StatusText.Text = "Mappings applied and saved";
+        }
+        catch
+        {
+            StatusText.Text = "Mappings applied, but settings could not be saved";
+        }
+    }
+
+    private void SaveSettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryApplyMappings(showSuccessStatus: false))
+        {
+            return;
+        }
+
+        try
+        {
+            _settingsService.Save(CreateCurrentSettings());
+            StatusText.Text = "Settings saved";
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = string.IsNullOrWhiteSpace(exception.Message)
+                ? "Settings could not be saved"
+                : $"Settings could not be saved: {exception.Message}";
+        }
     }
 
     private void MidiLearnButton_Click(object sender, RoutedEventArgs e)
@@ -250,10 +315,17 @@ public partial class MainWindow : Window
         });
     }
 
-    private void RefreshMidiDevices()
+    private void RefreshMidiDevices(
+        string? preferredInput = null,
+        string? preferredOutput = null,
+        bool usePreferredSelections = false)
     {
-        var selectedInput = InputDeviceComboBox.SelectedItem as string;
-        var selectedOutput = OutputDeviceComboBox.SelectedItem as string;
+        var selectedInput = usePreferredSelections
+            ? preferredInput
+            : InputDeviceComboBox.SelectedItem as string;
+        var selectedOutput = usePreferredSelections
+            ? preferredOutput
+            : OutputDeviceComboBox.SelectedItem as string;
 
         InputDeviceComboBox.Items.Clear();
         OutputDeviceComboBox.Items.Clear();
@@ -334,6 +406,7 @@ public partial class MainWindow : Window
         }
 
         _midiConnectionService.ReplaceMappings(_mappings);
+        _lastAppliedMappings = _mappings.Select(mapping => mapping.Clone()).ToList();
 
         if (showSuccessStatus)
         {
@@ -341,6 +414,35 @@ public partial class MainWindow : Window
         }
 
         return true;
+    }
+
+    private AppSettings CreateCurrentSettings()
+    {
+        return CreateCurrentSettings(_mappings);
+    }
+
+    private AppSettings CreateCurrentSettings(IEnumerable<MidiMapping> mappings)
+    {
+        return new AppSettings
+        {
+            InputDeviceName = InputDeviceComboBox.SelectedItem as string,
+            OutputDeviceName = OutputDeviceComboBox.SelectedItem as string,
+            Mappings = mappings.Select(mapping => mapping.Clone()).ToList()
+        };
+    }
+
+    private AppSettings CreateSettingsForClosing()
+    {
+        var editsCommitted =
+            MappingsDataGrid.CommitEdit(DataGridEditingUnit.Cell, true) &&
+            MappingsDataGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        var currentMappingsAreValid =
+            editsCommitted &&
+            ValidateMappings(out _, out _);
+
+        return currentMappingsAreValid
+            ? CreateCurrentSettings()
+            : CreateCurrentSettings(_lastAppliedMappings);
     }
 
     private bool ValidateMappings(out string errorMessage, out MidiMapping? invalidMapping)
