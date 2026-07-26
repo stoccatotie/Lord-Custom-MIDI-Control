@@ -1,22 +1,130 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
 namespace MidiControl.Core.Models;
 
-public sealed class MidiMapping
+public sealed class MidiMapping : INotifyPropertyChanged
 {
-    public Guid Id { get; set; } = Guid.NewGuid();
+    private Guid _id = Guid.NewGuid();
+    private bool _isEnabled = true;
+    private string _name = "New Mapping";
+    private int _inputChannel = 1;
+    private int _inputNote = 60;
+    private int _minimumVelocity = 1;
+    private int _outputChannel = 1;
+    private int _outputController = 20;
+    private int _outputValue = 127;
 
-    public bool IsEnabled { get; set; } = true;
+    public event PropertyChangedEventHandler? PropertyChanged;
 
-    public string Name { get; set; } = "New Mapping";
+    public Guid Id
+    {
+        get => _id;
+        set => SetField(ref _id, value);
+    }
 
-    public int InputChannel { get; set; } = 1;
+    public bool IsEnabled
+    {
+        get => _isEnabled;
+        set => SetField(ref _isEnabled, value);
+    }
 
-    public int InputNote { get; set; } = 60;
+    public string Name
+    {
+        get => _name;
+        set => SetField(ref _name, value);
+    }
 
-    public int MinimumVelocity { get; set; } = 1;
+    public int InputChannel
+    {
+        get => _inputChannel;
+        set => SetField(ref _inputChannel, value);
+    }
 
-    public int OutputChannel { get; set; } = 1;
+    public int InputNote
+    {
+        get => _inputNote;
+        set
+        {
+            if (SetField(ref _inputNote, value))
+            {
+                OnPropertyChanged(nameof(InputNoteName));
+            }
+        }
+    }
 
-    public int OutputController { get; set; } = 20;
+    public string InputNoteName => GetNoteName(InputNote);
 
-    public int OutputValue { get; set; } = 127;
+    public int MinimumVelocity
+    {
+        get => _minimumVelocity;
+        set => SetField(ref _minimumVelocity, value);
+    }
+
+    public int OutputChannel
+    {
+        get => _outputChannel;
+        set => SetField(ref _outputChannel, value);
+    }
+
+    public int OutputController
+    {
+        get => _outputController;
+        set => SetField(ref _outputController, value);
+    }
+
+    public int OutputValue
+    {
+        get => _outputValue;
+        set => SetField(ref _outputValue, value);
+    }
+
+    public MidiMapping Clone()
+    {
+        return new MidiMapping
+        {
+            Id = Id,
+            IsEnabled = IsEnabled,
+            Name = Name,
+            InputChannel = InputChannel,
+            InputNote = InputNote,
+            MinimumVelocity = MinimumVelocity,
+            OutputChannel = OutputChannel,
+            OutputController = OutputController,
+            OutputValue = OutputValue
+        };
+    }
+
+    private static string GetNoteName(int noteNumber)
+    {
+        string[] noteNames =
+        [
+            "C", "C#", "D", "D#", "E", "F",
+            "F#", "G", "G#", "A", "A#", "B"
+        ];
+
+        if (noteNumber is < 0 or > 127)
+        {
+            return string.Empty;
+        }
+
+        return $"{noteNames[noteNumber % 12]}{noteNumber / 12 - 1}";
+    }
+
+    private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+        {
+            return false;
+        }
+
+        field = value;
+        OnPropertyChanged(propertyName);
+        return true;
+    }
+
+    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
 }

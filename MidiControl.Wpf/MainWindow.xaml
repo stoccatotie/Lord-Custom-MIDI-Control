@@ -2,10 +2,10 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Guitar Pro MIDI Control"
-        Width="1000"
-        Height="650"
-        MinWidth="860"
-        MinHeight="520"
+        Width="1200"
+        Height="800"
+        MinWidth="1000"
+        MinHeight="650"
         WindowStartupLocation="CenterScreen"
         Background="#10131A"
         Foreground="#EEF2F7"
@@ -110,6 +110,50 @@
             <Setter Property="HorizontalContentAlignment" Value="Left" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
+
+        <Style TargetType="DataGrid">
+            <Setter Property="Background" Value="#151A22" />
+            <Setter Property="Foreground" Value="#DCE3EC" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="RowBackground" Value="#151A22" />
+            <Setter Property="AlternatingRowBackground" Value="#181E27" />
+            <Setter Property="HorizontalGridLinesBrush" Value="#2A3240" />
+            <Setter Property="VerticalGridLinesBrush" Value="#2A3240" />
+            <Setter Property="HeadersVisibility" Value="Column" />
+            <Setter Property="CanUserAddRows" Value="False" />
+            <Setter Property="AutoGenerateColumns" Value="False" />
+            <Setter Property="SelectionMode" Value="Single" />
+            <Setter Property="SelectionUnit" Value="FullRow" />
+        </Style>
+
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+            <Setter Property="Background" Value="#1D232E" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="0,0,1,1" />
+            <Setter Property="Padding" Value="10,9" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style TargetType="DataGridCell">
+            <Setter Property="Foreground" Value="#DCE3EC" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="8,5" />
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#293653" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Foreground" Value="#EEF2F7" />
+            <Setter Property="Background" Value="#232A36" />
+            <Setter Property="BorderBrush" Value="#52617A" />
+            <Setter Property="CaretBrush" Value="#EEF2F7" />
+            <Setter Property="Padding" Value="5,3" />
+        </Style>
     </Window.Resources>
 
     <Grid Margin="24">
@@ -176,44 +220,97 @@
             </Grid>
         </Border>
 
-        <Border Grid.Row="1"
-                Margin="0,18,0,14"
-                Background="{StaticResource PanelBrush}"
-                BorderBrush="{StaticResource BorderBrush}"
-                BorderThickness="1"
-                CornerRadius="10"
-                Padding="18">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
+        <Grid Grid.Row="1" Margin="0,18,0,14">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="52*" />
+                <RowDefinition Height="16" />
+                <RowDefinition Height="48*" />
+            </Grid.RowDefinitions>
 
-                <TextBlock Margin="0,0,0,14"
-                           FontSize="20"
-                           FontWeight="SemiBold"
-                           Text="MIDI Monitor" />
+            <Border Grid.Row="0"
+                    Background="{StaticResource PanelBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="18">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-                <Border Grid.Row="1"
-                        Background="#151A22"
-                        BorderBrush="{StaticResource BorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="7">
-                    <ListView x:Name="MidiMonitorListView">
-                        <ListView.View>
-                            <GridView AllowsColumnReorder="False">
-                                <GridViewColumn Width="110" Header="Time" DisplayMemberBinding="{Binding Time}" />
-                                <GridViewColumn Width="90" Header="Direction" DisplayMemberBinding="{Binding Direction}" />
-                                <GridViewColumn Width="170" Header="Message" DisplayMemberBinding="{Binding Message}" />
-                                <GridViewColumn Width="80" Header="Channel" DisplayMemberBinding="{Binding Channel}" />
-                                <GridViewColumn Width="235" Header="Data" DisplayMemberBinding="{Binding Data}" />
-                                <GridViewColumn Width="165" Header="Mapping" DisplayMemberBinding="{Binding Mapping}" />
-                            </GridView>
-                        </ListView.View>
-                    </ListView>
-                </Border>
-            </Grid>
-        </Border>
+                    <TextBlock Margin="0,0,0,12"
+                               FontSize="20"
+                               FontWeight="SemiBold"
+                               Text="Conversion Rules" />
+
+                    <DataGrid x:Name="MappingsDataGrid"
+                              Grid.Row="1"
+                              AlternationCount="2"
+                              Margin="0,0,0,12">
+                        <DataGrid.Columns>
+                            <DataGridCheckBoxColumn Width="75" Header="Enabled" Binding="{Binding IsEnabled}" />
+                            <DataGridTextColumn Width="*" MinWidth="170" Header="Name" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                            <DataGridTextColumn Width="80" Header="Input Ch" Binding="{Binding InputChannel, UpdateSourceTrigger=PropertyChanged}" />
+                            <DataGridTextColumn Width="90" Header="Input Note" Binding="{Binding InputNote, UpdateSourceTrigger=PropertyChanged}" />
+                            <DataGridTextColumn Width="85" Header="Note Name" IsReadOnly="True" Binding="{Binding InputNoteName}" />
+                            <DataGridTextColumn Width="75" Header="Min Vel" Binding="{Binding MinimumVelocity, UpdateSourceTrigger=PropertyChanged}" />
+                            <DataGridTextColumn Width="90" Header="Output Ch" Binding="{Binding OutputChannel, UpdateSourceTrigger=PropertyChanged}" />
+                            <DataGridTextColumn Width="65" Header="CC" Binding="{Binding OutputController, UpdateSourceTrigger=PropertyChanged}" />
+                            <DataGridTextColumn Width="70" Header="Value" Binding="{Binding OutputValue, UpdateSourceTrigger=PropertyChanged}" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <StackPanel Grid.Row="2" Orientation="Horizontal">
+                        <Button Margin="0,0,10,0" Content="Add Rule" Click="AddRuleButton_Click" />
+                        <Button Margin="0,0,10,0" Content="Delete Rule" Click="DeleteRuleButton_Click" />
+                        <Button Margin="0,0,10,0" Content="Duplicate Rule" Click="DuplicateRuleButton_Click" />
+                        <Button Content="Apply Changes"
+                                Style="{StaticResource AccentButtonStyle}"
+                                Click="ApplyChangesButton_Click" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="2"
+                    Background="{StaticResource PanelBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="18">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Margin="0,0,0,12"
+                               FontSize="20"
+                               FontWeight="SemiBold"
+                               Text="MIDI Monitor" />
+
+                    <Border Grid.Row="1"
+                            Background="#151A22"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="7">
+                        <ListView x:Name="MidiMonitorListView">
+                            <ListView.View>
+                                <GridView AllowsColumnReorder="False">
+                                    <GridViewColumn Width="110" Header="Time" DisplayMemberBinding="{Binding Time}" />
+                                    <GridViewColumn Width="90" Header="Direction" DisplayMemberBinding="{Binding Direction}" />
+                                    <GridViewColumn Width="170" Header="Message" DisplayMemberBinding="{Binding Message}" />
+                                    <GridViewColumn Width="80" Header="Channel" DisplayMemberBinding="{Binding Channel}" />
+                                    <GridViewColumn Width="235" Header="Data" DisplayMemberBinding="{Binding Data}" />
+                                    <GridViewColumn Width="165" Header="Mapping" DisplayMemberBinding="{Binding Mapping}" />
+                                </GridView>
+                            </ListView.View>
+                        </ListView>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
 
         <Button Grid.Row="2"
                 HorizontalAlignment="Right"

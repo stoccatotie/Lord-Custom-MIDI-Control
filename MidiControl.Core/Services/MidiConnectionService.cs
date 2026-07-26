@@ -2,7 +2,6 @@ using Melanchall.DryWetMidi.Common;
 using Melanchall.DryWetMidi.Core;
 using Melanchall.DryWetMidi.Multimedia;
 using MidiControl.Core.Models;
-using System.Collections.ObjectModel;
 
 namespace MidiControl.Core.Services;
 
@@ -16,7 +15,6 @@ public sealed class MidiConnectionService : IDisposable
 
     private readonly object _syncRoot = new();
     private readonly List<MidiMapping> _mappings;
-    private readonly ReadOnlyCollection<MidiMapping> _readOnlyMappings;
     private InputDevice? _inputDevice;
     private OutputDevice? _outputDevice;
 
@@ -36,7 +34,6 @@ public sealed class MidiConnectionService : IDisposable
                 OutputValue = 127
             }
         ];
-        _readOnlyMappings = _mappings.AsReadOnly();
     }
 
     public event EventHandler<MidiMessageReceivedEventArgs>? MessageReceived;
@@ -47,7 +44,33 @@ public sealed class MidiConnectionService : IDisposable
 
     public string? OutputDeviceName { get; private set; }
 
-    public IReadOnlyList<MidiMapping> Mappings => _readOnlyMappings;
+    public IReadOnlyList<MidiMapping> Mappings
+    {
+        get
+        {
+            lock (_syncRoot)
+            {
+                return _mappings.Select(mapping => mapping.Clone()).ToArray();
+            }
+        }
+    }
+
+    public void ReplaceMappings(IEnumerable<MidiMapping> mappings)
+    {
+        ArgumentNullException.ThrowIfNull(mappings);
+
+        var copies = mappings.Select(mapping =>
+            mapping?.Clone() ?? throw new ArgumentException(
+                "Mappings cannot contain null items.",
+                nameof(mappings)))
+            .ToArray();
+
+        lock (_syncRoot)
+        {
+            _mappings.Clear();
+            _mappings.AddRange(copies);
+        }
+    }
 
     public void Start(string inputDeviceName, string outputDeviceName)
     {

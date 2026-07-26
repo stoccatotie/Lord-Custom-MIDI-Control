@@ -1,3 +1,4 @@
+using MidiControl.Core.Models;
 using MidiControl.Core.Services;
 using System.Collections.ObjectModel;
 using System.Windows;
@@ -14,6 +15,7 @@ public partial class MainWindow : Window
 
     private readonly MidiDeviceService _midiDeviceService;
     private readonly MidiConnectionService _midiConnectionService;
+    private readonly ObservableCollection<MidiMapping> _mappings = new();
     private readonly ObservableCollection<MidiLogEntry> _midiLogEntries = new();
 
     public MainWindow()
@@ -24,6 +26,12 @@ public partial class MainWindow : Window
         _midiConnectionService = new MidiConnectionService();
         _midiConnectionService.MessageReceived += MidiConnectionService_MessageReceived;
 
+        foreach (var mapping in _midiConnectionService.Mappings)
+        {
+            _mappings.Add(mapping.Clone());
+        }
+
+        MappingsDataGrid.ItemsSource = _mappings;
         MidiMonitorListView.ItemsSource = _midiLogEntries;
         RefreshMidiDevices();
     }
@@ -55,6 +63,11 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (!TryApplyMappings(showSuccessStatus: false))
+        {
+            return;
+        }
+
         try
         {
             _midiConnectionService.Start(inputDeviceName, outputDeviceName);
@@ -75,6 +88,50 @@ public partial class MainWindow : Window
     private void ClearLogButton_Click(object sender, RoutedEventArgs e)
     {
         _midiLogEntries.Clear();
+    }
+
+    private void AddRuleButton_Click(object sender, RoutedEventArgs e)
+    {
+        var mapping = new MidiMapping();
+        _mappings.Add(mapping);
+        SelectMapping(mapping);
+    }
+
+    private void DeleteRuleButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (MappingsDataGrid.SelectedItem is not MidiMapping mapping)
+        {
+            return;
+        }
+
+        var index = _mappings.IndexOf(mapping);
+        _mappings.Remove(mapping);
+
+        if (_mappings.Count > 0)
+        {
+            SelectMapping(_mappings[Math.Min(index, _mappings.Count - 1)]);
+        }
+    }
+
+    private void DuplicateRuleButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (MappingsDataGrid.SelectedItem is not MidiMapping source)
+        {
+            return;
+        }
+
+        var copy = source.Clone();
+        copy.Id = Guid.NewGuid();
+        copy.Name = $"{source.Name} Copy";
+
+        var sourceIndex = _mappings.IndexOf(source);
+        _mappings.Insert(sourceIndex + 1, copy);
+        SelectMapping(copy);
+    }
+
+    private void ApplyChangesButton_Click(object sender, RoutedEventArgs e)
+    {
+        TryApplyMappings(showSuccessStatus: true);
     }
 
     private void MidiConnectionService_MessageReceived(object? sender, MidiMessageReceivedEventArgs e)
@@ -152,6 +209,103 @@ public partial class MainWindow : Window
         else if (comboBox.Items.Count > 0)
         {
             comboBox.SelectedIndex = 0;
+        }
+    }
+
+    private bool TryApplyMappings(bool showSuccessStatus)
+    {
+        if (!MappingsDataGrid.CommitEdit(DataGridEditingUnit.Cell, true) ||
+            !MappingsDataGrid.CommitEdit(DataGridEditingUnit.Row, true))
+        {
+            StatusText.Text = "Correct the value currently being edited";
+
+            if (MappingsDataGrid.CurrentItem is MidiMapping currentMapping)
+            {
+                SelectMapping(currentMapping, beginEdit: true);
+            }
+
+            return false;
+        }
+
+        if (!ValidateMappings(out var errorMessage, out var invalidMapping))
+        {
+            StatusText.Text = errorMessage;
+
+            if (invalidMapping is not null)
+            {
+                SelectMapping(invalidMapping, beginEdit: true);
+            }
+
+            return false;
+        }
+
+        _midiConnectionService.ReplaceMappings(_mappings);
+
+        if (showSuccessStatus)
+        {
+            StatusText.Text = "Mappings applied";
+        }
+
+        return true;
+    }
+
+    private bool ValidateMappings(out string errorMessage, out MidiMapping? invalidMapping)
+    {
+        foreach (var mapping in _mappings)
+        {
+            string? validationError = null;
+
+            if (string.IsNullOrWhiteSpace(mapping.Name))
+            {
+                validationError = "Name must not be empty.";
+            }
+            else if (mapping.InputChannel is < 1 or > 16)
+            {
+                validationError = "Input channel must be between 1 and 16.";
+            }
+            else if (mapping.InputNote is < 0 or > 127)
+            {
+                validationError = "Input note must be between 0 and 127.";
+            }
+            else if (mapping.MinimumVelocity is < 1 or > 127)
+            {
+                validationError = "Minimum velocity must be between 1 and 127.";
+            }
+            else if (mapping.OutputChannel is < 1 or > 16)
+            {
+                validationError = "Output channel must be between 1 and 16.";
+            }
+            else if (mapping.OutputController is < 0 or > 127)
+            {
+                validationError = "CC must be between 0 and 127.";
+            }
+            else if (mapping.OutputValue is < 0 or > 127)
+            {
+                validationError = "Output value must be between 0 and 127.";
+            }
+
+            if (validationError is not null)
+            {
+                invalidMapping = mapping;
+                errorMessage = $"{mapping.Name}: {validationError}";
+                return false;
+            }
+        }
+
+        invalidMapping = null;
+        errorMessage = string.Empty;
+        return true;
+    }
+
+    private void SelectMapping(MidiMapping mapping, bool beginEdit = false)
+    {
+        MappingsDataGrid.SelectedItem = mapping;
+        MappingsDataGrid.ScrollIntoView(mapping);
+        MappingsDataGrid.Focus();
+
+        if (beginEdit)
+        {
+            MappingsDataGrid.BeginEdit();
         }
     }
 
