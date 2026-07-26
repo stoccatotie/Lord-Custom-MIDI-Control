@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("Custom MIDI note to control command converter")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8005832e763305bd79b3b5ea29fc713d6d645c65")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+48b1443f3bc51dff8ccf86405a9bdb00d469b831")]
 [assembly: System.Reflection.AssemblyProductAttribute("Lord Custom MIDI Control")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MidiControl.Wpf")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
