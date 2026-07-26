@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="MidiControl.Console/MidiControl.Console.csproj" />
+  <Project Path="MidiControl.Wpf/MidiControl.Wpf.csproj" />
+</Solution>
