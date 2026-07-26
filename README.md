@@ -21,7 +21,7 @@ A Windows utility that converts incoming MIDI notes into MIDI Control Change mes
 
 ## Screenshot
 
-![Lord Custom MIDI Control](assets/screenshot.png)
+![Lord Custom MIDI Control](MidiControl.Wpf/Assets/screenshot.png)
 
 ## Download
 
