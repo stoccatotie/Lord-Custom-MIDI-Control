@@ -7,13 +7,15 @@ public sealed class MidiMessageReceivedEventArgs : EventArgs
         string direction,
         string messageType,
         int? channel,
-        string data)
+        string data,
+        string? mappingName = null)
     {
         Timestamp = timestamp;
         Direction = direction;
         MessageType = messageType;
         Channel = channel;
         Data = data;
+        MappingName = mappingName;
     }
 
     public DateTime Timestamp { get; }
@@ -25,4 +27,6 @@ public sealed class MidiMessageReceivedEventArgs : EventArgs
     public int? Channel { get; }
 
     public string Data { get; }
+
+    public string? MappingName { get; }
 }

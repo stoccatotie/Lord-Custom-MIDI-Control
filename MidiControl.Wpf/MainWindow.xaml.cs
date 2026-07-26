@@ -91,7 +91,8 @@ public partial class MainWindow : Window
                 e.Direction,
                 e.MessageType,
                 e.Channel?.ToString() ?? string.Empty,
-                e.Data);
+                e.Data,
+                e.MappingName ?? string.Empty);
 
             _midiLogEntries.Add(entry);
 

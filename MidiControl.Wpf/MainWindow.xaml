@@ -202,11 +202,12 @@
                     <ListView x:Name="MidiMonitorListView">
                         <ListView.View>
                             <GridView AllowsColumnReorder="False">
-                                <GridViewColumn Width="120" Header="Time" DisplayMemberBinding="{Binding Time}" />
-                                <GridViewColumn Width="110" Header="Direction" DisplayMemberBinding="{Binding Direction}" />
-                                <GridViewColumn Width="270" Header="Message" DisplayMemberBinding="{Binding Message}" />
-                                <GridViewColumn Width="100" Header="Channel" DisplayMemberBinding="{Binding Channel}" />
-                                <GridViewColumn Width="190" Header="Data" DisplayMemberBinding="{Binding Data}" />
+                                <GridViewColumn Width="110" Header="Time" DisplayMemberBinding="{Binding Time}" />
+                                <GridViewColumn Width="90" Header="Direction" DisplayMemberBinding="{Binding Direction}" />
+                                <GridViewColumn Width="170" Header="Message" DisplayMemberBinding="{Binding Message}" />
+                                <GridViewColumn Width="80" Header="Channel" DisplayMemberBinding="{Binding Channel}" />
+                                <GridViewColumn Width="235" Header="Data" DisplayMemberBinding="{Binding Data}" />
+                                <GridViewColumn Width="165" Header="Mapping" DisplayMemberBinding="{Binding Mapping}" />
                             </GridView>
                         </ListView.View>
                     </ListView>

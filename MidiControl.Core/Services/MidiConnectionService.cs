@@ -1,17 +1,13 @@
 using Melanchall.DryWetMidi.Common;
 using Melanchall.DryWetMidi.Core;
 using Melanchall.DryWetMidi.Multimedia;
+using MidiControl.Core.Models;
+using System.Collections.ObjectModel;
 
 namespace MidiControl.Core.Services;
 
 public sealed class MidiConnectionService : IDisposable
 {
-    private const int MappedInputChannel = 0;
-    private const int MappedNoteNumber = 67;
-    private const int MappedOutputChannel = 0;
-    private const int MappedControlNumber = 20;
-    private const int MappedControlValue = 127;
-
     private static readonly string[] NoteNames =
     {
         "C", "C#", "D", "D#", "E", "F",
@@ -19,8 +15,29 @@ public sealed class MidiConnectionService : IDisposable
     };
 
     private readonly object _syncRoot = new();
+    private readonly List<MidiMapping> _mappings;
+    private readonly ReadOnlyCollection<MidiMapping> _readOnlyMappings;
     private InputDevice? _inputDevice;
     private OutputDevice? _outputDevice;
+
+    public MidiConnectionService()
+    {
+        _mappings =
+        [
+            new MidiMapping
+            {
+                IsEnabled = true,
+                Name = "REAPER Mute Test",
+                InputChannel = 1,
+                InputNote = 67,
+                MinimumVelocity = 1,
+                OutputChannel = 1,
+                OutputController = 20,
+                OutputValue = 127
+            }
+        ];
+        _readOnlyMappings = _mappings.AsReadOnly();
+    }
 
     public event EventHandler<MidiMessageReceivedEventArgs>? MessageReceived;
 
@@ -29,6 +46,8 @@ public sealed class MidiConnectionService : IDisposable
     public string? InputDeviceName { get; private set; }
 
     public string? OutputDeviceName { get; private set; }
+
+    public IReadOnlyList<MidiMapping> Mappings => _readOnlyMappings;
 
     public void Start(string inputDeviceName, string outputDeviceName)
     {
@@ -163,16 +182,12 @@ public sealed class MidiConnectionService : IDisposable
 
     private void TryProcessMapping(MidiEvent midiEvent)
     {
-        // Temporary hardcoded mapping. Will be replaced by configurable mappings.
-        if (midiEvent is not NoteOnEvent noteOn ||
-            (int)noteOn.Channel != MappedInputChannel ||
-            (int)noteOn.NoteNumber != MappedNoteNumber ||
-            (int)noteOn.Velocity <= 0)
+        if (midiEvent is not NoteOnEvent noteOn || (int)noteOn.Velocity <= 0)
         {
             return;
         }
 
-        MidiMessageReceivedEventArgs? result = null;
+        var results = new List<MidiMessageReceivedEventArgs>();
 
         lock (_syncRoot)
         {
@@ -181,39 +196,111 @@ public sealed class MidiConnectionService : IDisposable
                 return;
             }
 
-            var controlChange = new ControlChangeEvent(
-                (SevenBitNumber)MappedControlNumber,
-                (SevenBitNumber)MappedControlValue)
+            foreach (var mapping in _mappings)
             {
-                Channel = (FourBitNumber)MappedOutputChannel
-            };
+                if (!mapping.IsEnabled)
+                {
+                    continue;
+                }
 
-            try
-            {
-                _outputDevice.SendEvent(controlChange);
-                result = new MidiMessageReceivedEventArgs(
-                    DateTime.Now,
-                    "OUTPUT",
-                    "Control Change",
-                    MappedOutputChannel + 1,
-                    $"CC {MappedControlNumber}, Value {MappedControlValue}");
-            }
-            catch (Exception exception)
-            {
-                var errorMessage = string.IsNullOrWhiteSpace(exception.Message)
-                    ? "Failed to send the MIDI message."
-                    : exception.Message;
+                var mappingName = string.IsNullOrWhiteSpace(mapping.Name)
+                    ? "Unnamed mapping"
+                    : mapping.Name;
+                var validationError = ValidateMapping(mapping);
 
-                result = new MidiMessageReceivedEventArgs(
-                    DateTime.Now,
-                    "ERROR",
-                    "Send Error",
-                    null,
-                    errorMessage);
+                if (validationError is not null)
+                {
+                    results.Add(new MidiMessageReceivedEventArgs(
+                        DateTime.Now,
+                        "ERROR",
+                        "Invalid Mapping",
+                        null,
+                        $"{mappingName}: {validationError}",
+                        mappingName));
+                    continue;
+                }
+
+                if ((int)noteOn.Channel + 1 != mapping.InputChannel ||
+                    (int)noteOn.NoteNumber != mapping.InputNote ||
+                    (int)noteOn.Velocity < mapping.MinimumVelocity)
+                {
+                    continue;
+                }
+
+                var controlChange = new ControlChangeEvent(
+                    (SevenBitNumber)mapping.OutputController,
+                    (SevenBitNumber)mapping.OutputValue)
+                {
+                    Channel = (FourBitNumber)(mapping.OutputChannel - 1)
+                };
+
+                try
+                {
+                    _outputDevice.SendEvent(controlChange);
+                    results.Add(new MidiMessageReceivedEventArgs(
+                        DateTime.Now,
+                        "OUTPUT",
+                        "Control Change",
+                        mapping.OutputChannel,
+                        $"CC {mapping.OutputController}, Value {mapping.OutputValue}",
+                        mappingName));
+                }
+                catch (Exception exception)
+                {
+                    var errorMessage = string.IsNullOrWhiteSpace(exception.Message)
+                        ? "Failed to send the MIDI message."
+                        : exception.Message;
+
+                    results.Add(new MidiMessageReceivedEventArgs(
+                        DateTime.Now,
+                        "ERROR",
+                        "Send Error",
+                        null,
+                        errorMessage,
+                        mappingName));
+                }
             }
         }
 
-        MessageReceived?.Invoke(this, result);
+        foreach (var result in results)
+        {
+            MessageReceived?.Invoke(this, result);
+        }
+    }
+
+    private static string? ValidateMapping(MidiMapping mapping)
+    {
+        if (mapping.InputChannel is < 1 or > 16)
+        {
+            return "Input channel must be between 1 and 16.";
+        }
+
+        if (mapping.InputNote is < 0 or > 127)
+        {
+            return "Input note must be between 0 and 127.";
+        }
+
+        if (mapping.MinimumVelocity is < 1 or > 127)
+        {
+            return "Minimum velocity must be between 1 and 127.";
+        }
+
+        if (mapping.OutputChannel is < 1 or > 16)
+        {
+            return "Output channel must be between 1 and 16.";
+        }
+
+        if (mapping.OutputController is < 0 or > 127)
+        {
+            return "Output controller must be between 0 and 127.";
+        }
+
+        if (mapping.OutputValue is < 0 or > 127)
+        {
+            return "Output value must be between 0 and 127.";
+        }
+
+        return null;
     }
 
     private static MidiMessageReceivedEventArgs CreateMessage(MidiEvent midiEvent)

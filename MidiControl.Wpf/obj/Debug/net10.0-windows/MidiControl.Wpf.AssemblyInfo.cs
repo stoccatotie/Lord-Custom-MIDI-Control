@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MidiControl.Wpf")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+1c229b2dd87527c9341526dd30210f9bd77e4591")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ba4104b9c2631a33e2f022a0819cee9c2be45518")]
 [assembly: System.Reflection.AssemblyProductAttribute("MidiControl.Wpf")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MidiControl.Wpf")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
