@@ -25,5 +25,4 @@ A Windows utility that converts incoming MIDI notes into MIDI Control Change mes
 
 ## Download
 
-Latest release:
-Releases → v1.0.0
+[![Download](https://img.shields.io/badge/Download-Latest_Release-blue)](../../releases/latest)
