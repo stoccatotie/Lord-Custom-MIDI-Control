@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" width="180">
+</p>
+
 # Lord Custom MIDI Control
 
 A Windows utility that converts incoming MIDI notes into MIDI Control Change messages.
