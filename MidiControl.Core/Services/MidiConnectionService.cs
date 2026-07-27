@@ -114,6 +114,67 @@ public sealed class MidiConnectionService : IDisposable
         }
     }
 
+    public void SendTestControlChange(
+        int channel,
+        int controller,
+        int value,
+        string? mappingName)
+    {
+        if (channel is < 1 or > 16)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(channel),
+                "Output channel must be between 1 and 16");
+        }
+
+        if (controller is < 0 or > 127)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(controller),
+                "CC number must be between 0 and 127");
+        }
+
+        if (value is < 0 or > 127)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(value),
+                "CC value must be between 0 and 127");
+        }
+
+        MidiMessageReceivedEventArgs message;
+
+        lock (_syncRoot)
+        {
+            if (!IsRunning)
+            {
+                throw new InvalidOperationException("Start MIDI connection first");
+            }
+
+            if (_outputDevice is null)
+            {
+                throw new InvalidOperationException("MIDI output connection is unavailable");
+            }
+
+            var controlChange = new ControlChangeEvent(
+                (SevenBitNumber)controller,
+                (SevenBitNumber)value)
+            {
+                Channel = (FourBitNumber)(channel - 1)
+            };
+
+            _outputDevice.SendEvent(controlChange);
+            message = new MidiMessageReceivedEventArgs(
+                DateTime.Now,
+                "OUT",
+                "Control Change",
+                channel,
+                $"CC {controller}, Value {value}",
+                mappingName);
+        }
+
+        MessageReceived?.Invoke(this, message);
+    }
+
     public void Start(string inputDeviceName, string outputDeviceName)
     {
         lock (_syncRoot)

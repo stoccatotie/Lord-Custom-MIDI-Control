@@ -180,6 +180,7 @@
             <Setter Property="Foreground" Value="#DCE3EC" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="8,5" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
             <Style.Triggers>
                 <Trigger Property="IsSelected" Value="True">
                     <Setter Property="Background" Value="#293653" />
@@ -193,6 +194,21 @@
             <Setter Property="BorderBrush" Value="#52617A" />
             <Setter Property="CaretBrush" Value="#EEF2F7" />
             <Setter Property="Padding" Value="5,3" />
+        </Style>
+
+        <Style x:Key="CenteredDataGridTextStyle"
+               TargetType="TextBlock"
+               BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="8,0,8,0" />
+        </Style>
+
+        <Style x:Key="CenteredDataGridEditingTextStyle"
+               TargetType="TextBox"
+               BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Padding" Value="8,3" />
         </Style>
     </Window.Resources>
 
@@ -336,17 +352,56 @@
                               AlternationCount="2"
                               Margin="0,0,0,12">
                         <DataGrid.Columns>
-                            <DataGridCheckBoxColumn Width="75" Header="Enabled" Binding="{Binding IsEnabled}" />
-                            <DataGridTextColumn Width="*" MinWidth="170" Header="Name" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
-                            <DataGridTextColumn Width="80" Header="Input Ch" Binding="{Binding InputChannel, UpdateSourceTrigger=PropertyChanged}" />
-                            <DataGridTextColumn Width="90" Header="Input Note" Binding="{Binding InputNote, UpdateSourceTrigger=PropertyChanged}" />
-                            <DataGridTextColumn Width="85" Header="Note Name" IsReadOnly="True" Binding="{Binding InputNoteName}" />
-                            <DataGridTextColumn Width="75" Header="Min Vel" Binding="{Binding MinimumVelocity, UpdateSourceTrigger=PropertyChanged}" />
-                            <DataGridTextColumn Width="90" Header="Output Ch" Binding="{Binding OutputChannel, UpdateSourceTrigger=PropertyChanged}" />
+                            <DataGridCheckBoxColumn Width="75" Header="Enabled" Binding="{Binding IsEnabled}">
+                                <DataGridCheckBoxColumn.ElementStyle>
+                                    <Style TargetType="CheckBox">
+                                        <Setter Property="HorizontalAlignment" Value="Center" />
+                                        <Setter Property="VerticalAlignment" Value="Center" />
+                                    </Style>
+                                </DataGridCheckBoxColumn.ElementStyle>
+                                <DataGridCheckBoxColumn.EditingElementStyle>
+                                    <Style TargetType="CheckBox">
+                                        <Setter Property="HorizontalAlignment" Value="Center" />
+                                        <Setter Property="VerticalAlignment" Value="Center" />
+                                    </Style>
+                                </DataGridCheckBoxColumn.EditingElementStyle>
+                            </DataGridCheckBoxColumn>
+                            <DataGridTextColumn Width="*"
+                                                MinWidth="170"
+                                                Header="Name"
+                                                ElementStyle="{StaticResource CenteredDataGridTextStyle}"
+                                                EditingElementStyle="{StaticResource CenteredDataGridEditingTextStyle}"
+                                                Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                            <DataGridTextColumn Width="80"
+                                                Header="Input Ch"
+                                                ElementStyle="{StaticResource CenteredDataGridTextStyle}"
+                                                EditingElementStyle="{StaticResource CenteredDataGridEditingTextStyle}"
+                                                Binding="{Binding InputChannel, UpdateSourceTrigger=PropertyChanged}" />
+                            <DataGridTextColumn Width="90"
+                                                Header="Input Note"
+                                                ElementStyle="{StaticResource CenteredDataGridTextStyle}"
+                                                EditingElementStyle="{StaticResource CenteredDataGridEditingTextStyle}"
+                                                Binding="{Binding InputNote, UpdateSourceTrigger=PropertyChanged}" />
+                            <DataGridTextColumn Width="85"
+                                                Header="Note Name"
+                                                IsReadOnly="True"
+                                                ElementStyle="{StaticResource CenteredDataGridTextStyle}"
+                                                Binding="{Binding InputNoteName}" />
+                            <DataGridTextColumn Width="75"
+                                                Header="Min Vel"
+                                                ElementStyle="{StaticResource CenteredDataGridTextStyle}"
+                                                EditingElementStyle="{StaticResource CenteredDataGridEditingTextStyle}"
+                                                Binding="{Binding MinimumVelocity, UpdateSourceTrigger=PropertyChanged}" />
+                            <DataGridTextColumn Width="90"
+                                                Header="Output Ch"
+                                                ElementStyle="{StaticResource CenteredDataGridTextStyle}"
+                                                EditingElementStyle="{StaticResource CenteredDataGridEditingTextStyle}"
+                                                Binding="{Binding OutputChannel, UpdateSourceTrigger=PropertyChanged}" />
                             <DataGridTemplateColumn Width="240" Header="CC">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <ComboBox ItemsSource="{Binding MidiControlChangeOptions, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                                                  Style="{StaticResource MidiDeviceComboBoxStyle}"
                                                   DisplayMemberPath="DisplayName"
                                                   SelectedValuePath="Number"
                                                   SelectedValue="{Binding OutputController, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -357,7 +412,27 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTextColumn Width="70" Header="Value" Binding="{Binding OutputValue, UpdateSourceTrigger=PropertyChanged}" />
+                            <DataGridTextColumn Width="70"
+                                                Header="Value"
+                                                ElementStyle="{StaticResource CenteredDataGridTextStyle}"
+                                                EditingElementStyle="{StaticResource CenteredDataGridEditingTextStyle}"
+                                                Binding="{Binding OutputValue, UpdateSourceTrigger=PropertyChanged}" />
+                            <DataGridTemplateColumn Width="65" Header="Test">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Width="34"
+                                                Height="26"
+                                                MinHeight="0"
+                                                Padding="0"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
+                                                Content="▶"
+                                                ToolTip="Test rule"
+                                                Tag="{Binding}"
+                                                Click="TestRuleButton_Click" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                         </DataGrid.Columns>
                     </DataGrid>
 

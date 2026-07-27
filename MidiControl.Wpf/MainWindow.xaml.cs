@@ -318,6 +318,71 @@ public partial class MainWindow : Window
         SelectMapping(copy);
     }
 
+    private void TestRuleButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: MidiMapping mapping })
+        {
+            SetStatus("Mapping could not be tested");
+            return;
+        }
+
+        if (!MappingsDataGrid.CommitEdit(DataGridEditingUnit.Cell, true) ||
+            !MappingsDataGrid.CommitEdit(DataGridEditingUnit.Row, true))
+        {
+            SetStatus("Correct the value currently being edited");
+            return;
+        }
+
+        if (mapping.OutputChannel is < 1 or > 16)
+        {
+            SetStatus("Output channel must be between 1 and 16");
+            return;
+        }
+
+        if (mapping.OutputController is < 0 or > 127)
+        {
+            SetStatus("CC number must be between 0 and 127");
+            return;
+        }
+
+        if (mapping.OutputValue is < 0 or > 127)
+        {
+            SetStatus("CC value must be between 0 and 127");
+            return;
+        }
+
+        if (OutputDeviceComboBox.SelectedItem is not string)
+        {
+            SetStatus("Select MIDI output device");
+            return;
+        }
+
+        if (!_midiConnectionService.IsRunning)
+        {
+            SetStatus("Start MIDI connection first");
+            return;
+        }
+
+        try
+        {
+            _midiConnectionService.SendTestControlChange(
+                mapping.OutputChannel,
+                mapping.OutputController,
+                mapping.OutputValue,
+                mapping.Name);
+
+            SetStatus(
+                $"Tested \"{mapping.Name}\" — Ch {mapping.OutputChannel}, " +
+                $"CC {mapping.OutputController}, Value {mapping.OutputValue}");
+        }
+        catch (Exception exception)
+        {
+            SetStatus(string.IsNullOrWhiteSpace(exception.Message)
+                ? "MIDI test message could not be sent"
+                : exception.Message);
+        }
+    }
+
     private void ApplyChangesButton_Click(object sender, RoutedEventArgs e)
     {
         if (_isMidiLearnActive)
